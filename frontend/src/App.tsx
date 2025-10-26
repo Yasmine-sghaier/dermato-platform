@@ -7,6 +7,10 @@ import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import Home from "./pages/Home";
 import Login from "./pages/Login"; 
+import AppointmentsPage from "./pages/AppointmentsPage";
+import SecretaryDashboard from "./pages/DashboardSec";
+import ProtectedRoute from "./components/ProtectedRoute";
+import NotFoundPage from "./pages/Notfound";
 
 
 const queryClient = new QueryClient();
@@ -22,7 +26,21 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/appointments" element={<AppointmentsPage />} />
              
+           <Route
+          path="/secretary/dashboard"
+          element={
+            <ProtectedRoute requiredRole="secretary">
+              <SecretaryDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Page d’accès refusé */}
+        <Route path="/unauthorized" element={<NotFoundPage />} />
+
+     
             </Routes>
           </main>
           <Footer />

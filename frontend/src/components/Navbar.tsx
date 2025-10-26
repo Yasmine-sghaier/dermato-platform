@@ -1,10 +1,29 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Activity } from "lucide-react";
 
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Vérifie si un token existe dans le localStorage
+    const token = localStorage.getItem("token");
+    const userRole = localStorage.getItem("role");
+    setIsLoggedIn(!!token);
+    setRole(userRole);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    setIsLoggedIn(false);
+    setRole(null);
+    navigate("/"); // Redirection vers la page d'accueil
+  };
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
@@ -28,21 +47,35 @@ export const Navbar = () => {
             <Link to="/services" className="text-sm font-medium hover:text-primary transition-colors">
               Services
             </Link>
-            <Link to="/appointment" className="text-sm font-medium hover:text-primary transition-colors">
+            <Link to="/appointments" className="text-sm font-medium hover:text-primary transition-colors">
               Rendez-vous
             </Link>
             <Link to="/about" className="text-sm font-medium hover:text-primary transition-colors">
               À propos
             </Link>
+
+            {/* Accès spécifique selon le rôle */}
+            {role === "secretary" && (
+              <Link to="/secretary/dashboard" className="text-sm font-medium text-primary">
+                Espace secrétaire
+              </Link>
+            )}
           </div>
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Link to="/login">
-              <Button variant="ghost" size="sm">
-                Connexion
+            {!isLoggedIn ? (
+              <Link to="/login">
+                <Button variant="ghost" size="sm">
+                  Connexion
+                </Button>
+              </Link>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
+                Déconnexion
               </Button>
-            </Link>
+            )}
+
             <Link to="/appointment">
               <Button size="sm" className="shadow-soft hover:shadow-hover transition-all">
                 Prendre RDV
@@ -63,44 +96,66 @@ export const Navbar = () => {
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-border animate-fade-in">
             <div className="flex flex-col gap-3">
-              <Link 
-                to="/" 
+              <Link
+                to="/"
                 className="px-4 py-2 hover:bg-muted rounded-lg transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Accueil
               </Link>
-              <Link 
-                to="/services" 
+              <Link
+                to="/services"
                 className="px-4 py-2 hover:bg-muted rounded-lg transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Services
               </Link>
-              <Link 
-                to="/appointment" 
+              <Link
+                to="/appointments"
                 className="px-4 py-2 hover:bg-muted rounded-lg transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 Rendez-vous
               </Link>
-              <Link 
-                to="/about" 
+              <Link
+                to="/about"
                 className="px-4 py-2 hover:bg-muted rounded-lg transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
                 À propos
               </Link>
-              <div className="flex flex-col gap-2 px-4 pt-2">
-                <Link to="/login" onClick={() => setIsMenuOpen(false)}>
-                  <Button variant="outline" className="w-full">
-                    Connexion
-                  </Button>
+
+              {role === "secretary" && (
+                <Link
+                  to="/secretary/dashboard"
+                  className="px-4 py-2 text-primary hover:bg-muted rounded-lg transition-colors"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Espace secrétaire
                 </Link>
-                <Link to="/appointment" onClick={() => setIsMenuOpen(false)}>
-                  <Button className="w-full">
-                    Prendre RDV
+              )}
+
+              <div className="flex flex-col gap-2 px-4 pt-2">
+                {!isLoggedIn ? (
+                  <Link to="/login" onClick={() => setIsMenuOpen(false)}>
+                    <Button variant="outline" className="w-full">
+                      Connexion
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      handleLogout();
+                      setIsMenuOpen(false);
+                    }}
+                  >
+                    Déconnexion
                   </Button>
+                )}
+                <Link to="/appointment" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full">Prendre RDV</Button>
                 </Link>
               </div>
             </div>
