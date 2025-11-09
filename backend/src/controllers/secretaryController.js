@@ -24,10 +24,10 @@ export const sendEmail = async (to, subject, html) => {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email envoyé à ${to}`);
+    console.log(`Email envoyé à ${to}`);
     return result;
   } catch (error) {
-    console.error(`❌ Erreur envoi email à ${to}:`, error);
+    console.error(` Erreur envoi email à ${to}:`, error);
     throw error;
   }
 };
@@ -35,9 +35,9 @@ export const sendEmail = async (to, subject, html) => {
 
 export const confirmAppointment = async (req, res) => {
   try {
-    const { appointmentId } = req.body;
+     const { id } = req.params;
 
-    const appointment = await Appointment.findByPk(appointmentId);
+    const appointment = await Appointment.findByPk(id);
     if (!appointment) {
       return res.status(404).json({ message: "Rendez-vous introuvable." });
     }
@@ -52,7 +52,7 @@ export const confirmAppointment = async (req, res) => {
       { 
         email: appointment.email,
         name: appointment.name,
-        appointmentId: appointment.id 
+        id: appointment.id 
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
@@ -96,7 +96,7 @@ export const confirmAppointment = async (req, res) => {
         <p><strong>Important :</strong> Ce lien expirera dans 7 jours.</p>
         
         <p>En cas de problème, contactez-nous au :<br>
-        📞 01 23 45 67 89<br>
+        📞 +216 52 411 242 <br>
         📧 ${process.env.EMAIL_USER}</p>
 
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">

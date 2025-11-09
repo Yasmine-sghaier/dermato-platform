@@ -6,26 +6,21 @@ import Appointment from "../models/Appointment.js";
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log(`🔐 Tentative de login: ${email}`);
-    console.log(`🔑 Mot de passe reçu: ${password}`);
+   
 
     const user = await User.findOne({ where: { email } });
 
     if (!user) {
-      console.log('❌ Utilisateur non trouvé');
+     
       return res.status(400).json({ message: "Utilisateur introuvable." });
     }
 
-    console.log(`✅ Utilisateur trouvé: ${user.email}`);
-    console.log(`🔐 Hash dans la base: ${user.password}`);
-    console.log(`📏 Longueur du hash: ${user.password.length}`);
 
-    console.log('🔑 Début comparaison bcrypt...');
     const validPass = await bcrypt.compare(password, user.password);
-    console.log(`✅ Résultat bcrypt.compare: ${validPass}`);
+   
 
     if (!validPass) {
-      console.log('❌ Mot de passe incorrect');
+     
       return res.status(400).json({ message: "Mot de passe incorrect." });
     }
 
@@ -36,16 +31,22 @@ export const login = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    console.log('🎉 Login réussi, token généré');
+    console.log('Login réussi, token généré');
 
     res.status(200).json({
       message: "Connexion réussie",
       token,
-      role: user.role 
+      role: user.role ,
+       user: { //
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
     });
 
   } catch (error) {
-    console.error('💥 Erreur dans login:', error);
+    console.error(' Erreur dans login:', error);
     res.status(500).json({ message: "Erreur serveur", error: error.message });
   }
 };
@@ -74,7 +75,7 @@ export const registerFromAppointment = async (req, res) => {
     }
 
     // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Créer un nouveau user
     const newUser = await User.create({
@@ -82,7 +83,7 @@ export const registerFromAppointment = async (req, res) => {
       email: appointment.email,
       password: hashedPassword,
       phone: appointment.phone,
-      birthday: appointment.birthday,
+      birthdate: appointment.birthdate,
       address: appointment.address,
     });
 

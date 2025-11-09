@@ -12,14 +12,14 @@ import SecretaryDashboard from "./pages/DashboardSec";
 import CreateAccountFromToken from "./pages/CreateAccountFormValues";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFoundPage from "./pages/Notfound";
-
+import { AuthProvider } from '@/hooks/Authcontext';
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-
+<AuthProvider>
       <BrowserRouter>
         <div className="flex flex-col min-h-screen">
           <Navbar />
@@ -27,11 +27,10 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/appointments" element={<AppointmentsPage />} />
+             <Route path="/appointments" element={<AppointmentsPage />} />
               <Route path="/create-account/:token" element={<CreateAccountFromToken />} />
              
-           <Route
-          path="/secretary/dashboard"
+           <Route path="/secretary/dashboard"
           element={
             <ProtectedRoute requiredRole="secretary">
               <SecretaryDashboard />
@@ -48,6 +47,7 @@ const App = () => (
           <Footer />
         </div>
       </BrowserRouter>
+      </AuthProvider>
    </TooltipProvider>
   </QueryClientProvider>
 );

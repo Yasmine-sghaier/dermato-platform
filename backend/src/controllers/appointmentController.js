@@ -5,33 +5,67 @@ import nodemailer from "nodemailer";
 
 export const createAppointment = async (req, res) => {
   try {
-    const { name, email, phone, address, birthdate, requested_date } = req.body;
+    const { 
+      firstName, 
+      lastName, 
+      phone, 
+      address, 
+      birthDate, 
+      date, 
+      time,
+      email 
+    } = req.body;
 
    
-    if (!name || !email || !phone || !requested_date) {
+    if (!firstName || !lastName || !phone || !date || !time) {
       return res.status(400).json({ 
         message: "Champs manquants", 
-        required: ["name", "email", "phone", "requested_date"],
+        required: ["firstName", "lastName", "phone", "date", "time"],
         received: req.body
       });
     }
 
+    // Combiner date et time pour créer requested_date
+    const appointmentDateTime = new Date(`${date}T${time}`);
+    
+    // Validation de la date
+    if (isNaN(appointmentDateTime.getTime())) {
+      return res.status(400).json({ 
+        message: "Date ou heure invalide" 
+      });
+    }
+
+    // Vérifier que la date n'est pas dans le passé
+    const now = new Date();
+    if (appointmentDateTime < now) {
+      return res.status(400).json({ 
+        message: "La date du rendez-vous ne peut pas être dans le passé" 
+      });
+    }
+
     const appointment = await Appointment.create({
-      name,
-      email,
+      name: `${firstName} ${lastName}`.trim(),
+      email: email || null, // Optionnel dans le nouveau formulaire
       phone,
       address: address || null,
-      birthdate: birthdate || null,
-      requested_date, 
+      birthdate: birthDate || null,
+      requested_date: appointmentDateTime, 
       status: "pending"
     });
     
     res.status(201).json({ 
-      message: "Demande de rendez-vous enregistrée", 
+      message: "Rendez-vous créé avec succès", 
       appointment: {
         id: appointment.id,
-        name: appointment.name,
+        firstName: firstName,
+        lastName: lastName,
+        fullName: appointment.name,
         email: appointment.email,
+        phone: appointment.phone,
+        address: appointment.address,
+        birthDate: appointment.birthdate,
+        appointmentDate: date,
+        appointmentTime: time,
         requested_date: appointment.requested_date,
         status: appointment.status,
         created_at: appointment.created_at 
@@ -39,54 +73,36 @@ export const createAppointment = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur création RDV:", error);
+    
+    // Gestion des erreurs de contrainte unique
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ 
+        message: "Un rendez-vous existe déjà pour cette date et heure" 
+      });
+    }
+    
+    // Gestion des erreurs de validation Sequelize
+    if (error.name === 'SequelizeValidationError') {
+      const validationErrors = error.errors.map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({ 
+        message: "Erreur de validation des données",
+        errors: validationErrors
+      });
+    }
+    
     res.status(500).json({ 
-      message: "Erreur serveur", 
-      error: error.message
+      message: "Erreur serveur lors de la création du rendez-vous", 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
-
-export const getPendingAppointments = async (req, res) => {
-  const pending = await Appointment.findAll({ where: { status: "pending" } });
+export const getAllAppointments = async (req, res) => {
+  const pending = await Appointment.findAll();
   res.json(pending);
 };
 
-export const confirmAppointment = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const appointment = await Appointment.findByPk(id);
-    if (!appointment) return res.status(404).json({ message: "Rendez-vous introuvable" });
-
-
-    const token = crypto.randomBytes(20).toString("hex");
-    appointment.status = "confirmed";
-    appointment.confirmationToken = token;
-    await appointment.save();
-
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
-
-       const registrationLink = `http://localhost:5173/create-account/${token}`;
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: appointment.email,
-      subject: "Confirmation de votre rendez-vous dermatologique",
-      html: `
-        <h2>Bonjour ${appointment.name},</h2>
-        <p>Votre rendez-vous du ${appointment.requestedDate} a été confirmé.</p>
-        <p>Veuillez créer votre compte pour accéder à votre espace patient :</p>
-        <a href="${registrationLink}">Créer mon compte</a>
-      `
-    });
-
-    res.json({ message: "Rendez-vous confirmé et e-mail envoyé", token });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
-  }
-};

@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Users, Clock, Check, X, Phone, Mail, Search, Filter, User, MapPin, Cake } from "lucide-react";
+import { toast } from "sonner";
+import axios from "axios";
 
 type AppointmentRequest = {
   id: string;
@@ -22,55 +24,65 @@ export default function SecretaryDashboard() {
   const [requests, setRequests] = useState<AppointmentRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<AppointmentRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("pending"); // Par défaut "pending"
   const [selectedRequest, setSelectedRequest] = useState<AppointmentRequest | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Données simulées
- useEffect(() => {
-  const fetchAppointments = async () => {
-    try {
-      const token = localStorage.getItem("token"); // ou ton hook d'auth
-      const response = await fetch("http://localhost:5000/api/appointments/pending", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  // Charger TOUS les rendez-vous
+  useEffect(() => {
+    const fetchAllAppointments = async () => {
+      try {
+        setIsLoading(true);
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:5000/api/appointments/all", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-      if (!response.ok) {
-        throw new Error("Erreur lors de la récupération des rendez-vous");
+        if (!response.ok) {
+          throw new Error("Erreur lors de la récupération des rendez-vous");
+        }
+
+        const data = await response.json();
+
+        // Formatter les données
+        const formatted = data.map((item: any) => ({
+          id: item.id.toString(),
+          name: item.name,
+          email: item.email,
+          phone: item.phone,
+          address: item.address,
+          birthdate: item.birthdate,
+          requested_date: item.requested_date,
+          status: item.status,
+          created_at: item.createdAt || item.created_at,
+          notes: item.notes,
+        }));
+
+        setRequests(formatted);
+      } catch (error) {
+        console.error("Erreur :", error);
+        toast.error("Erreur lors du chargement des rendez-vous");
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      const data = await response.json();
+    fetchAllAppointments();
+  }, []);
 
-      // Adapte les noms de champs selon ta base
-      const formatted = data.map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        email: item.email,
-        phone: item.phone,
-        address: item.address,
-        birthdate: item.birthdate,
-        requested_date: item.requested_date,
-        status: item.status,
-        created_at: item.createdAt, // selon ta colonne Sequelize
-        notes: item.notes,
-      }));
-
-      setRequests(formatted);
-      setFilteredRequests(formatted);
-    } catch (error) {
-      console.error("Erreur :", error);
-    }
-  };
-
-  fetchAppointments();
-}, []);
-
-
-  // Filtrage des demandes
+  // Filtrage des demandes côté frontend
   useEffect(() => {
     let filtered = requests;
 
+    // Filtre par statut - par défaut "pending"
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(request => request.status === statusFilter);
+    }
+
+    // Filtre par recherche
     if (searchTerm) {
       filtered = filtered.filter(request =>
         request.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -79,9 +91,10 @@ export default function SecretaryDashboard() {
       );
     }
 
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(request => request.status === statusFilter);
-    }
+    // Trier par date de création (les plus récents en premier)
+    filtered = filtered.sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
     setFilteredRequests(filtered);
   }, [searchTerm, statusFilter, requests]);
@@ -91,12 +104,77 @@ export default function SecretaryDashboard() {
     pending: requests.filter(r => r.status === 'pending').length,
     confirmed: requests.filter(r => r.status === 'confirmed').length,
     cancelled: requests.filter(r => r.status === 'cancelled').length,
+    completed: requests.filter(r => r.status === 'completed').length,
   };
 
-  const handleStatusChange = (requestId: string, newStatus: AppointmentRequest['status']) => {
-    setRequests(prev => prev.map(request =>
-      request.id === requestId ? { ...request, status: newStatus } : request
-    ));
+  // Fonction pour confirmer un rendez-vous
+  const handleConfirmAppointment = async (requestId: string) => {
+    setLoading(requestId);
+    try {
+      const token = localStorage.getItem("token");
+      
+      const response = await axios.post(
+        `http://localhost:5000/api/secretary/confirm/${requestId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      // Mettre à jour le statut localement
+      setRequests(prev => prev.map(request =>
+        request.id === requestId ? { ...request, status: 'confirmed' } : request
+      ));
+
+      if (selectedRequest?.id === requestId) {
+        setSelectedRequest(prev => prev ? { ...prev, status: 'confirmed' } : null);
+      }
+
+      toast.success(response.data.message || "Rendez-vous confirmé avec succès !");
+      
+    } catch (err: any) {
+      console.error("Erreur confirmation RDV:", err);
+      
+      if (err.response) {
+        const errorMessage = err.response.data.message || "Erreur lors de la confirmation du rendez-vous";
+        toast.error(errorMessage);
+      } else if (err.request) {
+        toast.error("Erreur de connexion au serveur");
+      } else {
+        toast.error("Une erreur inattendue s'est produite");
+      }
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // Fonction pour annuler un rendez-vous
+  const handleCancelAppointment = async (requestId: string) => {
+    setLoading(requestId);
+    try {
+      const token = localStorage.getItem("token");
+      
+      // Appel API pour annuler (vous devrez créer cette route)
+      // Pour l'instant, on gère seulement localement
+      setRequests(prev => prev.map(request =>
+        request.id === requestId ? { ...request, status: 'cancelled' } : request
+      ));
+
+      if (selectedRequest?.id === requestId) {
+        setSelectedRequest(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      }
+
+      toast.success("Rendez-vous annulé avec succès");
+      
+    } catch (err: any) {
+      console.error("Erreur annulation RDV:", err);
+      toast.error("Erreur lors de l'annulation du rendez-vous");
+    } finally {
+      setLoading(null);
+    }
   };
 
   const getStatusBadge = (status: AppointmentRequest['status']) => {
@@ -132,6 +210,38 @@ export default function SecretaryDashboard() {
     });
   };
 
+  // Obtenir le titre dynamique selon le filtre
+  const getListTitle = () => {
+    switch (statusFilter) {
+      case 'pending':
+        return "Rendez-vous en attente de décision";
+      case 'confirmed':
+        return "Rendez-vous confirmés";
+      case 'cancelled':
+        return "Rendez-vous annulés";
+      case 'completed':
+        return "Rendez-vous terminés";
+      default:
+        return "Tous les rendez-vous";
+    }
+  };
+
+  // Obtenir la description dynamique selon le filtre
+  const getListDescription = () => {
+    switch (statusFilter) {
+      case 'pending':
+        return "Prenez une décision pour chaque demande - Accepter ou Refuser";
+      case 'confirmed':
+        return "Rendez-vous confirmés et planifiés";
+      case 'cancelled':
+        return "Rendez-vous annulés ou refusés";
+      case 'completed':
+        return "Rendez-vous déjà effectués";
+      default:
+        return "Consultez l'ensemble des rendez-vous";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 pt-16">
       <div className="container mx-auto px-4 py-8">
@@ -141,17 +251,15 @@ export default function SecretaryDashboard() {
             <Users className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium text-primary">Espace Secrétaire</span>
           </div>
-          
-    
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6 mb-8">
-          {/* Cartes de statistiques */}
+        {/* Statistiques */}
+        <div className="grid lg:grid-cols-5 gap-6 mb-8">
           <Card className="bg-card/50 backdrop-blur-sm border-border/50 animate-fade-in">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total demandes</p>
+                  <p className="text-sm font-medium text-muted-foreground">Total</p>
                   <p className="text-2xl font-bold">{stats.total}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -202,6 +310,20 @@ export default function SecretaryDashboard() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50 animate-fade-in" style={{ animationDelay: "400ms" }}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Terminés</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.completed}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -211,10 +333,10 @@ export default function SecretaryDashboard() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5 text-primary" />
-                  Demandes de rendez-vous
+                  {getListTitle()}
                 </CardTitle>
                 <CardDescription>
-                  Gérer les demandes en attente de confirmation
+                  {getListDescription()}
                 </CardDescription>
                 
                 {/* Barre de recherche et filtres */}
@@ -233,90 +355,116 @@ export default function SecretaryDashboard() {
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="flex h-10 rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
-                    <option value="all">Tous les statuts</option>
                     <option value="pending">En attente</option>
                     <option value="confirmed">Confirmés</option>
                     <option value="cancelled">Annulés</option>
+                    <option value="completed">Terminés</option>
+                    <option value="all">Tous les statuts</option>
                   </select>
                 </div>
               </CardHeader>
               
               <CardContent>
-                <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                  {filteredRequests.map((request, index) => (
-                    <Card 
-                      key={request.id}
-                      className={`p-4 cursor-pointer transition-all hover:shadow-md border-l-4 ${
-                        selectedRequest?.id === request.id ? 'border-l-primary bg-primary/5' : 'border-l-transparent'
-                      } ${
-                        request.status === 'pending' ? 'bg-yellow-500/5' : ''
-                      } animate-scale-in`}
-                      style={{ animationDelay: `${index * 50}ms` }}
-                      onClick={() => setSelectedRequest(request)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-semibold text-lg">{request.name}</h3>
-                            {getStatusBadge(request.status)}
+                {isLoading ? (
+                  <div className="text-center py-8">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Chargement des rendez-vous...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                    {filteredRequests.map((request, index) => (
+                      <Card 
+                        key={request.id}
+                        className={`p-4 cursor-pointer transition-all hover:shadow-md border-l-4 ${
+                          selectedRequest?.id === request.id ? 'border-l-primary bg-primary/5' : 'border-l-transparent'
+                        } ${
+                          request.status === 'pending' ? 'bg-yellow-500/5' :
+                          request.status === 'confirmed' ? 'bg-green-500/5' :
+                          request.status === 'cancelled' ? 'bg-red-500/5' : 'bg-blue-500/5'
+                        } animate-scale-in`}
+                        style={{ animationDelay: `${index * 50}ms` }}
+                        onClick={() => setSelectedRequest(request)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-semibold text-lg">{request.name}</h3>
+                              {getStatusBadge(request.status)}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                {formatDate(request.requested_date)}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                {request.email}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4" />
+                                {request.phone}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4" />
+                                {formatDate(request.created_at)}
+                              </div>
+                            </div>
                           </div>
                           
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4" />
-                              {formatDate(request.requested_date)}
+                          {/* Actions rapides - SEULEMENT pour les rendez-vous en attente */}
+                          {request.status === 'pending' && (
+                            <div className="flex gap-2 ml-4">
+                              <Button
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConfirmAppointment(request.id);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700"
+
+                                disabled={loading === request.id}
+                              >
+                                {loading === request.id ? (
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelAppointment(request.id);
+                                }}
+                                disabled={loading === request.id}
+                              >
+                                {loading === request.id ? (
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                ) : (
+                                  <X className="h-4 w-4" />
+                                )}
+                              </Button>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4" />
-                              {request.email}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Phone className="h-4 w-4" />
-                              {request.phone}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              {formatDate(request.created_at)}
-                            </div>
-                          </div>
+                          )}
                         </div>
-                        
-                        {/* Actions rapides */}
-                        {request.status === 'pending' && (
-                          <div className="flex gap-2 ml-4">
-                            <Button
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStatusChange(request.id, 'confirmed');
-                              }}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStatusChange(request.id, 'cancelled');
-                              }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
+                      </Card>
+                    ))}
+                    
+                    {filteredRequests.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>
+                          {statusFilter === 'pending' 
+                            ? "Aucun rendez-vous en attente" 
+                            : `Aucun rendez-vous ${statusFilter} trouvé`
+                          }
+                        </p>
                       </div>
-                    </Card>
-                  ))}
-                  
-                  {filteredRequests.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Aucune demande trouvée</p>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -328,7 +476,7 @@ export default function SecretaryDashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5 text-primary" />
-                    Détails de la demande
+                    Détails du rendez-vous
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(selectedRequest.status)}
@@ -411,32 +559,42 @@ export default function SecretaryDashboard() {
                       {selectedRequest.status === 'pending' && (
                         <>
                           <Button 
-                            onClick={() => handleStatusChange(selectedRequest.id, 'confirmed')}
+                            onClick={() => handleConfirmAppointment(selectedRequest.id)}
                             className="w-full bg-green-600 hover:bg-green-700"
+                            disabled={loading === selectedRequest.id}
                           >
-                            <Check className="mr-2 h-4 w-4" />
-                            Confirmer le rendez-vous
+                            {loading === selectedRequest.id ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                                Confirmation...
+                              </>
+                            ) : (
+                              <>
+                                <Check className="mr-2 h-4 w-4" />
+                                Confirmer le rendez-vous
+                              </>
+                            )}
                           </Button>
                           <Button 
                             variant="destructive"
-                            onClick={() => handleStatusChange(selectedRequest.id, 'cancelled')}
+                            onClick={() => handleCancelAppointment(selectedRequest.id)}
                             className="w-full"
+                            disabled={loading === selectedRequest.id}
                           >
-                            <X className="mr-2 h-4 w-4" />
-                            Refuser la demande
+                            {loading === selectedRequest.id ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                                Annulation...
+                              </>
+                            ) : (
+                              <>
+                                <X className="mr-2 h-4 w-4" />
+                                Refuser la demande
+                              </>
+                            )}
                           </Button>
                         </>
                       )}
-                      
-                      <Button variant="outline" className="w-full">
-                        <Phone className="mr-2 h-4 w-4" />
-                        Contacter le patient
-                      </Button>
-                      
-                      <Button variant="outline" className="w-full">
-                        <Mail className="mr-2 h-4 w-4" />
-                        Envoyer un email
-                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -444,11 +602,7 @@ export default function SecretaryDashboard() {
             ) : (
               <Card className="bg-card/50 backdrop-blur-sm border-border/50 shadow-soft animate-fade-in">
                 <CardContent className="p-8 text-center">
-                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="font-semibold mb-2">Sélectionnez une demande</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Cliquez sur une demande dans la liste pour voir les détails et effectuer des actions
-                  </p>
+               
                 </CardContent>
               </Card>
             )}

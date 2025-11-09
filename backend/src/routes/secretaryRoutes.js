@@ -4,12 +4,11 @@ import { verifyToken, authorizeRoles } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.post(
-  "/confirm",
+router.post("/confirm/:id",
   verifyToken,
   authorizeRoles("secretary"),
   confirmAppointment
 );
 
+
 export default router;
-router.post("/confirm", verifyToken, authorizeRoles("secretary"), confirmAppointment);

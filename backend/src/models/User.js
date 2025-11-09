@@ -35,25 +35,14 @@ const User = sequelize.define("User", {
     allowNull: true
   },
   role: {
-    type: DataTypes.ENUM('patient', 'secretary', 'dermatologist'), // ⚠️ Supprimer 'dermatologist'
+    type: DataTypes.ENUM('patient', 'secretary', 'dermatologist'), 
     defaultValue: 'patient'
   }
 }, {
   tableName: "users",
   underscored: true,
   timestamps: true,
-  hooks: {
-    beforeCreate: async (user) => {
-      console.log(`🔐 Hachage du mot de passe pour: ${user.email}`);
-      user.password = await bcrypt.hash(user.password, 12);
-      console.log(`✅ Mot de passe hashé: ${user.password.substring(0, 20)}...`);
-    },
-    beforeUpdate: async (user) => {
-      if (user.changed('password')) {
-        user.password = await bcrypt.hash(user.password, 12);
-      }
-    }
-  }
+
 });
 
 export default User;

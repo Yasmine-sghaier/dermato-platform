@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Brain, Calendar, FileText, Shield, ArrowRight, Check } from "lucide-react";
 import heroImage from "@/assets/hero-dermatology.jpg";
@@ -8,6 +9,7 @@ import appointmentIcon from "@/assets/appointment-icon.jpg";
 import medicalRecordIcon from "@/assets/medical-record-icon.jpg";
 
 export default function Home() {
+  const { isAuthenticated, isPatient } = useAuth();
   const features = [
     {
       icon: Brain,
@@ -71,11 +73,7 @@ export default function Home() {
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
-                <Link to="/services">
-                  <Button size="lg" variant="outline">
-                    Découvrir nos Services
-                  </Button>
-                </Link>
+          
               </div>
 
               <div className="flex flex-wrap gap-4 pt-4">

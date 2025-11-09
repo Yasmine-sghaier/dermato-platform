@@ -1,16 +1,17 @@
-import { useState } from "react";
+import { useState,useContext } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-
+import { AuthContext } from '@/hooks/Authcontext';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Mail, Lock, Activity } from "lucide-react";
+
 
 const loginSchema = z.object({
   email: z.string().email("Email invalide"),
@@ -22,7 +23,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-
+  const { login } = useContext(AuthContext); 
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -31,15 +32,21 @@ const onLoginSubmit = async (data: LoginFormValues) => {
   setLoading(true);
   try {
     const res = await axios.post("http://localhost:5000/api/auth/login", data);
-    const { token, role } = res.data;
+  const { token, role, user } = res.data;
 
-    // Sauvegarder session
-    localStorage.setItem("token", token);
-    localStorage.setItem("role", role);
+    login(
+      token, 
+      {
+        id: user?.id || '',
+        name: user?.name || data.email.split('@')[0],
+        email: data.email,
+        role: role as 'patient' | 'secretary' | 'dermatologist'
+      }
+    );
+
 
     toast.success("Connexion réussie !");
 
-    // Redirection selon rôle
     if (role === "patient") navigate("/patient/dashboard");
     else if (role === "secretary") navigate("/secretary/dashboard");
     else if (role === "dermatologist") navigate("/dermatologist/dashboard");
