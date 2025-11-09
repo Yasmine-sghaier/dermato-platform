@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login"; 
 import AppointmentsPage from "./pages/AppointmentsPage";
 import SecretaryDashboard from "./pages/DashboardSec";
+import PatientSpace from "./pages/PatientSpace";
 import CreateAccountFromToken from "./pages/CreateAccountFormValues";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFoundPage from "./pages/Notfound";
@@ -34,6 +35,13 @@ const App = () => (
           element={
             <ProtectedRoute requiredRole="secretary">
               <SecretaryDashboard />
+            </ProtectedRoute>
+          }
+        />
+            <Route path="/space/patient"
+          element={
+            <ProtectedRoute requiredRole="patient">
+              <PatientSpace />
             </ProtectedRoute>
           }
         />

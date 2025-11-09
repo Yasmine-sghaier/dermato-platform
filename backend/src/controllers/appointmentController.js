@@ -1,7 +1,4 @@
 import Appointment from "../models/Appointment.js";
-import crypto from "crypto";
-import nodemailer from "nodemailer";
-
 
 export const createAppointment = async (req, res) => {
   try {

@@ -9,6 +9,7 @@ import authRoutes from "./routes/authRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
 import secretaryRoutes from "./routes/secretaryRoutes.js";
 import roleRoutes from "./routes/roleRoutes.js";
+import availabilityRoutes from "./routes/availabilityRoutes.js";
 import User from "./models/User.js"; 
 
 
@@ -37,6 +38,7 @@ app.use(rateLimit({
 app.use("/api/auth", authRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/secretary", secretaryRoutes);
+app.use("/api/availability",availabilityRoutes)
 app.use("/api", roleRoutes); 
 app.get("/", (req, res) => {
   res.send("API Dermatologie en ligne !");

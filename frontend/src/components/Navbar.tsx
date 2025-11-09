@@ -74,11 +74,7 @@ export const Navbar = () => {
                     Connexion
                   </Button>
                 </Link>
-                <Link to="/register">
-                  <Button variant="outline" size="sm">
-                    Inscription
-                  </Button>
-                </Link>
+           
               </>
             ) : (
               <div className="flex items-center gap-3">

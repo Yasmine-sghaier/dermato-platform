@@ -47,7 +47,7 @@ const onLoginSubmit = async (data: LoginFormValues) => {
 
     toast.success("Connexion réussie !");
 
-    if (role === "patient") navigate("/patient/dashboard");
+    if (role === "patient") navigate("/space/patient");
     else if (role === "secretary") navigate("/secretary/dashboard");
     else if (role === "dermatologist") navigate("/dermatologist/dashboard");
     else navigate("/");
