@@ -12,3 +12,4 @@ router.post(
 );
 
 export default router;
+router.post("/confirm", verifyToken, authorizeRoles("secretary"), confirmAppointment);

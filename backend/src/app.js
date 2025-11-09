@@ -10,13 +10,19 @@ import appointmentRoutes from "./routes/appointmentRoutes.js";
 import secretaryRoutes from "./routes/secretaryRoutes.js";
 import roleRoutes from "./routes/roleRoutes.js";
 import User from "./models/User.js"; 
+
+
+
 const app = express();
 
 
 app.use(helmet()); 
 app.use(cors()); 
 app.use(express.json());
-
+app.use(cors({
+  origin: "http://localhost:5173", // ou votre port frontend
+  credentials: true
+}));
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, 
   max: 100, 

@@ -71,7 +71,7 @@ export const confirmAppointment = async (req, res) => {
       auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
     });
 
-    const registrationLink = `http://localhost:3000/register?token=${token}`;
+       const registrationLink = `http://localhost:5173/create-account/${token}`;
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: appointment.email,

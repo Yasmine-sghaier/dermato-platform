@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login"; 
 import AppointmentsPage from "./pages/AppointmentsPage";
 import SecretaryDashboard from "./pages/DashboardSec";
+import CreateAccountFromToken from "./pages/CreateAccountFormValues";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFoundPage from "./pages/Notfound";
 
@@ -27,6 +28,7 @@ const App = () => (
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/appointments" element={<AppointmentsPage />} />
+              <Route path="/create-account/:token" element={<CreateAccountFromToken />} />
              
            <Route
           path="/secretary/dashboard"
