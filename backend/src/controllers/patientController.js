@@ -1,3 +1,4 @@
+
 import User from "../models/User.js";
 
 // Récupérer un patient par ID
@@ -43,3 +44,36 @@ export const updatePatient = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
+
+
+import Appointment from "../models/Appointment.js";
+import User from "../models/User.js";
+
+
+export const getPatientAppointments = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const appointments = await Appointment.findAll({
+      where: {
+        user_id: userId
+      },
+      order: [['requested_date', 'DESC']],
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'email'] // Spécifiez les attributs que vous voulez
+      }]
+    });
+
+    res.json(appointments);
+
+  } catch (error) {
+    console.error("Erreur récupération RDV patient:", error);
+    res.status(500).json({ 
+      message: "Erreur serveur", 
+      error: error.message
+    });
+  }
+};
+

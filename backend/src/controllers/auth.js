@@ -50,6 +50,7 @@ export const login = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur", error: error.message });
   }
 };
+// controllers/authController.js
 export const registerFromAppointment = async (req, res) => {
   try {
     const { token, password } = req.body;
@@ -69,13 +70,17 @@ export const registerFromAppointment = async (req, res) => {
     }
 
     // Trouver le rendez-vous correspondant
-    const appointment = await Appointment.findOne({ where: { email } });
+    const appointment = await Appointment.findOne({ 
+      where: { email },
+      order: [['created_at', 'DESC']] // Prendre le plus récent
+    });
+    
     if (!appointment) {
       return res.status(404).json({ message: "Aucun rendez-vous associé à cet email." });
     }
 
     // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Créer un nouveau user
     const newUser = await User.create({
@@ -85,11 +90,19 @@ export const registerFromAppointment = async (req, res) => {
       phone: appointment.phone,
       birthdate: appointment.birthdate,
       address: appointment.address,
+      role: 'patient'
     });
 
-    // Marquer le rendez-vous comme "inscription terminée"
-    appointment.is_registered = true;
-    await appointment.save();
+    // Lier TOUS les rendez-vous de cet email au nouvel utilisateur
+    const linkedAppointments = await Appointment.update(
+      { user_id: newUser.id },
+      { 
+        where: { 
+          email: email,
+          user_id: null 
+        } 
+      }
+    );
 
     return res.status(201).json({
       message: "Compte patient créé avec succès.",
@@ -97,7 +110,8 @@ export const registerFromAppointment = async (req, res) => {
         id: newUser.id,
         name: newUser.name,
         email: newUser.email
-      }
+      },
+      appointments_linked: linkedAppointments[0] // Nombre de RDV liés
     });
 
   } catch (error) {

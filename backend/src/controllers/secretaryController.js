@@ -4,7 +4,6 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 
 
-// Fonction d'envoi d'email
 export const sendEmail = async (to, subject, html) => {
   try {
     const transporter = nodemailer.createTransport({
@@ -107,7 +106,7 @@ export const confirmAppointment = async (req, res) => {
       </div>
     `;
 
-    // Envoyer l'email
+  
     await sendEmail(
       appointment.email,
       "✅ Confirmation de votre rendez-vous dermatologique",
@@ -130,6 +129,57 @@ export const confirmAppointment = async (req, res) => {
     res.status(500).json({ 
       message: "Erreur lors de la confirmation du rendez-vous", 
       error: error.message 
+    });
+  }
+};
+
+export const createAppointmentForPatient = async (req, res) => {
+  try {
+    const { patientId, firstName, lastName, email, phone, date, time, notes } = req.body;
+
+    if (!patientId || !firstName || !lastName || !date || !time) {
+      return res.status(400).json({ 
+        message: "Champs manquants", 
+        required: ["patientId", "firstName", "lastName", "date", "time"]
+      });
+    }
+
+    // if patient exist
+    const patient = await User.findByPk(patientId);
+    if (!patient) {
+      return res.status(404).json({ message: "Patient non trouvé" });
+    }
+
+    const appointmentDateTime = new Date(`${date}T${time}`);
+    
+    const appointment = await Appointment.create({
+      name: `${firstName} ${lastName}`.trim(),
+      email: email || patient.email,
+      phone: phone || patient.phone,
+      requested_date: appointmentDateTime,
+      user_id: patientId,
+      created_by: "secretary",
+      status: "confirmed", // confimed by default since is created by secretary
+      notes: notes || null
+    });
+
+    res.status(201).json({ 
+      message: "Rendez-vous créé avec succès", 
+      appointment: {
+        id: appointment.id,
+        name: appointment.name,
+        email: appointment.email,
+        requested_date: appointment.requested_date,
+        status: appointment.status,
+        created_by: appointment.created_by
+      }
+    });
+
+  } catch (error) {
+    console.error("Erreur création RDV secrétaire:", error);
+    res.status(500).json({ 
+      message: "Erreur serveur", 
+      error: error.message
     });
   }
 };

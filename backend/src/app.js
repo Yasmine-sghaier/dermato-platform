@@ -4,9 +4,12 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import "./config/db.js";
+
 import { seedDefaultUsers } from "./config/seedUsers.js";
+import { setupAssociations } from './models/Association.js';
 import authRoutes from "./routes/authRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
+import patientRoutes from "./routes/patientRoutes.js";
 import secretaryRoutes from "./routes/secretaryRoutes.js";
 import roleRoutes from "./routes/roleRoutes.js";
 import availabilityRoutes from "./routes/availabilityRoutes.js";
@@ -34,9 +37,10 @@ app.use(rateLimit({
 
   await seedDefaultUsers();
 })();
-
+setupAssociations();
 app.use("/api/auth", authRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/patient",patientRoutes)
 app.use("/api/secretary", secretaryRoutes);
 app.use("/api/availability",availabilityRoutes)
 app.use("/api", roleRoutes); 

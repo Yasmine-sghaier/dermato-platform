@@ -49,7 +49,7 @@ export default function PatientSpace() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/patient/appointments", {
+        const response = await fetch("http://localhost:5000/api/patient/Myappointments", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
