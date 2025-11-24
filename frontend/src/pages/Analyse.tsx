@@ -7,12 +7,19 @@ import { Progress } from "@/components/ui/progress";
 import { Upload, Camera, Brain, AlertTriangle, Check, X, Zap, Shield } from "lucide-react";
 
 const symptomsList = [
-  { id: "redness", name: "Rougeur", icon: "🔴" },
-  { id: "itching", name: "Démangeaisons", icon: "🤚" },
-  { id: "pain", name: "Douleur", icon: "😣" },
-  { id: "dryness", name: "Peau sèche", icon: "🏜️" },
-  { id: "rash", name: "Éruption cutanée", icon: "🔴" },
-  { id: "wounds", name: "Plaies ouvertes", icon: "🩹" },
+ { id: "scaling", name: "Desquamation / peau qui pèle", icon: "🧽" },
+{ id: "blisters", name: "Cloques / vésicules", icon: "💧" },
+{ id: "swelling", name: "Gonflement", icon: "💢" },
+{ id: "burning", name: "Sensation de brûlure", icon: "🔥" },
+{ id: "pus", name: "Pus / infection", icon: "🟡" },
+{ id: "nodules", name: "Nodules / grosseurs", icon: "⚪" },
+{ id: "crusts", name: "Croûtes", icon: "🍞" },
+{ id: "hair_loss", name: "Perte de cheveux", icon: "🧑‍🦲" },
+{ id: "bleeding", name: "Saignement", icon: "🩸" },
+{ id: "thickening", name: "Épaississement de la peau", icon: "🧱" },
+{ id: "ring_shape", name: "Lésions en forme d’anneau", icon: "⭕" }
+
+  
 ];
 
 export default function SkinAiAnalyzer() {

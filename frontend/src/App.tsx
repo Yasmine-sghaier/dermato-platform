@@ -15,6 +15,7 @@ import PatientSpace from "./pages/PatientSpace";
 import CreateAccountFromToken from "./pages/CreateAccountFormValues";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFoundPage from "./pages/Notfound";
+import Analyse from "./pages/Analyse";
 import { AuthProvider } from '@/hooks/Authcontext';
 
 const queryClient = new QueryClient();
@@ -62,6 +63,10 @@ const App = () => (
             </ProtectedRoute>
           }
         />
+     
+   
+      <Route path="/analyse" element={<Analyse />} />
+    
 
         {/* Page d’accès refusé */}
         <Route path="/unauthorized" element={<NotFoundPage />} />

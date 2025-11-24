@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Search, Filter, Plus, Calendar, Eye, Phone, Mail, Loader2 } from "lucide-react";
+import { Users, Search, Filter, Plus, Calendar, Eye, Phone, Mail, Loader2, FileText } from "lucide-react";
+import PrescriptionPopup from "@/components/PrescriptionPopup";
 
 interface ApiPatient {
   id: number;
@@ -42,6 +43,15 @@ export default function PatientsPage() {
   const [ageFilter, setAgeFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  
+  // États pour le popup de prescription
+  const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<{
+    id: number;
+    name: string;
+    age: number | string;
+    condition: string;
+  } | null>(null);
 
   // Fonction utilitaire pour récupérer le token
   const getAuthToken = (): string | null => {
@@ -103,6 +113,33 @@ export default function PatientsPage() {
   useEffect(() => {
     fetchPatients();
   }, []);
+
+  // Ouvrir le popup de prescription
+  const handleOpenPrescription = (patient: FormattedPatient) => {
+    setSelectedPatient({
+      id: patient.id,
+      name: patient.name,
+      age: patient.age,
+      condition: patient.condition
+    });
+    setIsPrescriptionOpen(true);
+  };
+
+  // Fermer le popup
+  const handleClosePrescription = () => {
+    setIsPrescriptionOpen(false);
+    setSelectedPatient(null);
+  };
+
+  // Sauvegarder la prescription
+  const handleSavePrescription = (prescription: any) => {
+    console.log('Prescription sauvegardée:', prescription);
+    // Ici vous pouvez envoyer la prescription à votre API
+    // Exemple: await savePrescription(prescription);
+    
+    // Afficher un message de succès
+    alert(`Prescription créée avec succès pour ${prescription.patientName}`);
+  };
 
   // Formater les données pour l'affichage - CORRIGÉ
   const formattedPatients: FormattedPatient[] = patients.map(patient => {
@@ -167,17 +204,16 @@ export default function PatientsPage() {
   console.log('📊 Patients formatés:', formattedPatients);
 
   // Filtrage des patients
-const filteredPatients = formattedPatients.filter(patient => {
-  const search = searchTerm.toLowerCase();
+  const filteredPatients = formattedPatients.filter(patient => {
+    const search = searchTerm.toLowerCase();
 
-  const matchesSearch =
-    patient.name.toLowerCase().includes(search) ||
-    patient.email.toLowerCase().includes(search) ||
-    patient.phone.toLowerCase().includes(search);
+    const matchesSearch =
+      patient.name.toLowerCase().includes(search) ||
+      patient.email.toLowerCase().includes(search) ||
+      patient.phone.toLowerCase().includes(search);
 
-  return matchesSearch;
-});
-
+    return matchesSearch;
+  });
 
   const formatDate = (dateString: string) => {
     if (!dateString || dateString === 'Aucun') return 'Aucun';
@@ -250,6 +286,16 @@ const filteredPatients = formattedPatients.filter(patient => {
 
   return (
     <div className="space-y-6">
+      {/* Popup de prescription */}
+      {selectedPatient && (
+        <PrescriptionPopup
+          patient={selectedPatient}
+          isOpen={isPrescriptionOpen}
+          onClose={handleClosePrescription}
+          onSave={handleSavePrescription}
+        />
+      )}
+
       {/* En-tête de page */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
@@ -296,7 +342,6 @@ const filteredPatients = formattedPatients.filter(patient => {
 
           {/* Actions filtres */}
           <div className="flex justify-between items-center">
-       
             <Button 
               variant="outline" 
               size="sm"
@@ -348,8 +393,11 @@ const filteredPatients = formattedPatients.filter(patient => {
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mb-3">
-                       
-                     
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Âge:</span>
+                          <span className="font-medium">{patient.age} ans</span>
+                        </div>
+                  
                         <div className="flex items-center gap-1">
                           <span className="text-muted-foreground">Dernière visite:</span>
                           <span className="font-medium">{formatDate(patient.lastVisit)}</span>
@@ -397,9 +445,9 @@ const filteredPatients = formattedPatients.filter(patient => {
 
                   {/* Actions */}
                   <div className="flex flex-col gap-2 ml-4">
-                        <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      Rapport Médicale
+                      Rapport Médical
                     </Button>
                     <Button size="sm" className="flex items-center gap-2">
                       <Eye className="h-4 w-4" />
@@ -407,11 +455,15 @@ const filteredPatients = formattedPatients.filter(patient => {
                     </Button>
                     <Button variant="outline" size="sm" className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      Affecter un  RDV
+                      Affecter un RDV
                     </Button>
-                     <Button size="sm" className="flex items-center gap-2">
+                    <Button 
+                      size="sm" 
+                      className="flex items-center gap-2"
+                      onClick={() => handleOpenPrescription(patient)}
+                    >
+                      <FileText className="h-4 w-4" />
                       Créer Prescription 
-                      
                     </Button>
                   </div>
                 </div>

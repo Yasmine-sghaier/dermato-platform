@@ -66,15 +66,15 @@ export const Navbar = () => {
               </Link>
             )}
                             {shouldShowDiagnostic && (
-  <Link to="/diagnostic">
-    <Button 
-      size="sm"
-      variant="secondary"
-       className="bg-[#1e2a3a] text-white hover:bg-[#253348] transition-all"
-    >
-      Faire diagnostic préliminaire
-    </Button>
-  </Link>
+ <Link to="/analyse">
+  <Button
+    size="sm"
+    variant="secondary"
+    className="bg-[#1e2a3a] text-white hover:bg-[#253348] transition-all"
+  >
+    Faire diagnostic préliminaire
+  </Button>
+</Link>
 )}
           </div>
 
