@@ -17,6 +17,8 @@ export const Navbar = () => {
 
   // Déterminer si le bouton "Prendre RDV" doit être affiché
   const shouldShowAppointmentButton = !isLoggedIn || role === "patient";
+  const shouldShowDiagnostic = isLoggedIn && role === "patient";
+
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
@@ -63,6 +65,17 @@ export const Navbar = () => {
                 Mon espace
               </Link>
             )}
+                            {shouldShowDiagnostic && (
+  <Link to="/diagnostic">
+    <Button 
+      size="sm"
+      variant="secondary"
+       className="bg-[#1e2a3a] text-white hover:bg-[#253348] transition-all"
+    >
+      Faire diagnostic préliminaire
+    </Button>
+  </Link>
+)}
           </div>
 
           {/* CTA Buttons */}
@@ -81,10 +94,16 @@ export const Navbar = () => {
                 {/* Informations utilisateur */}
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <User className="h-4 w-4" />
-                  <span className="font-medium">{user?.name || "Utilisateur"}</span>
-                  <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full capitalize">
-                    {role}
-                  </span>
+               <span
+  onClick={() => navigate(`/patients/${user?.id}`)}
+  className="font-medium cursor-pointer hover:underline"
+>
+  {user?.name || "Utilisateur"}
+</span>
+
+    <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full capitalize">
+      {role}
+    </span>
                 </div>
                 
                 {/* Bouton Déconnexion */}
@@ -97,17 +116,12 @@ export const Navbar = () => {
                   <LogOut className="h-4 w-4" />
                   Déconnexion
                 </Button>
+
+
               </div>
             )}
 
-            {/* Bouton Prendre RDV - Conditionnel */}
-            {shouldShowAppointmentButton && (
-              <Link to="/appointment">
-                <Button size="sm" className="shadow-soft hover:shadow-hover transition-all">
-                  Prendre RDV
-                </Button>
-              </Link>
-            )}
+          
           </div>
 
           {/* Mobile Menu Button */}

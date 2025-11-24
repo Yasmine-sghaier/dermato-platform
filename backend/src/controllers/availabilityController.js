@@ -95,7 +95,7 @@ export const getAvailableSlots = async (req, res) => {
           ]
         },
         status: {
-          [Op.notIn]: ['canceled']
+          [Op.notIn]: ['cancelled']
         }
       },
       attributes: ['requested_date']
@@ -150,7 +150,7 @@ export const getAvailableSlots = async (req, res) => {
   }
 };
 
-// Vérifier la disponibilité d'un créneau spécifique
+// availailaulity for specificic time 
 export const checkSlotAvailability = async (req, res) => {
   try {
     const { date, time } = req.params;
@@ -203,7 +203,7 @@ export const checkSlotAvailability = async (req, res) => {
           ]
         },
         status: {
-          [Op.notIn]: ['canceled']
+          [Op.notIn]: ['cancelled']
         }
       }
     });

@@ -9,6 +9,8 @@ import Home from "./pages/Home";
 import Login from "./pages/Login"; 
 import AppointmentsPage from "./pages/AppointmentsPage";
 import SecretaryDashboard from "./pages/DashboardSec";
+import DashboardDermato from "./pages/DashboardDermato";
+import PatientInfo from "./pages/PatientInfo";
 import PatientSpace from "./pages/PatientSpace";
 import CreateAccountFromToken from "./pages/CreateAccountFormValues";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -35,6 +37,21 @@ const App = () => (
           element={
             <ProtectedRoute requiredRole="secretary">
               <SecretaryDashboard />
+            </ProtectedRoute>
+          }
+        />
+           <Route path="/dermato/dashboard"
+          element={
+            <ProtectedRoute requiredRole="dermatologist">
+        <DashboardDermato />
+            </ProtectedRoute>
+          }
+        />
+
+           <Route path="/patients/:patientId"
+          element={
+            <ProtectedRoute requiredRole="patient">
+              <PatientInfo />
             </ProtectedRoute>
           }
         />

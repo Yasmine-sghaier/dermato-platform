@@ -1,6 +1,6 @@
 
 import User from "../models/User.js";
-
+import Appointment from "../models/Appointment.js";
 // Récupérer un patient par ID
 export const getPatientById = async (req, res) => {
   try {
@@ -46,33 +46,48 @@ export const updatePatient = async (req, res) => {
 };
 
 
-import Appointment from "../models/Appointment.js";
-import User from "../models/User.js";
+
+
+
 
 
 export const getPatientAppointments = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id; // récupéré par le middleware
 
     const appointments = await Appointment.findAll({
-      where: {
-        user_id: userId
-      },
-      order: [['requested_date', 'DESC']],
-      include: [{
-        model: User,
-        as: 'user',
-        attributes: ['id', 'name', 'email'] // Spécifiez les attributs que vous voulez
-      }]
+      where: { user_id: userId }, // ou patientId selon ton modèle
+      order: [["requested_date", "ASC"]] // tri par date
     });
 
     res.json(appointments);
-
   } catch (error) {
-    console.error("Erreur récupération RDV patient:", error);
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+
+export const getAllPatients = async (req, res) => {
+  try {
+    const patients = await User.findAll({ 
+      where: { role: "patient" },
+      attributes: { 
+        exclude: ['password'] // Exclure le mot de passe
+      },
+      order: [['createdAt', 'DESC']] // Trier par date de création
+    });
+
+    res.json({
+      success: true,
+      data: patients,
+      count: patients.length
+    });
+  } catch (error) {
+    console.error("Erreur lors de la récupération des patients:", error);
     res.status(500).json({ 
-      message: "Erreur serveur", 
-      error: error.message
+      success: false,
+      message: "Erreur serveur lors de la récupération des patients" 
     });
   }
 };

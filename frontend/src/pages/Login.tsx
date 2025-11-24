@@ -49,7 +49,7 @@ const onLoginSubmit = async (data: LoginFormValues) => {
 
     if (role === "patient") navigate("/space/patient");
     else if (role === "secretary") navigate("/secretary/dashboard");
-    else if (role === "dermatologist") navigate("/dermatologist/dashboard");
+    else if (role === "dermatologist") navigate("/dermato/dashboard");
     else navigate("/");
   } catch (err: any) {
     console.log(err.response?.data);

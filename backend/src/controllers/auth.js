@@ -79,14 +79,12 @@ export const registerFromAppointment = async (req, res) => {
       return res.status(404).json({ message: "Aucun rendez-vous associé à cet email." });
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+   
     // Créer un nouveau user
     const newUser = await User.create({
       name: appointment.name,
       email: appointment.email,
-      password: hashedPassword,
+      password: password,
       phone: appointment.phone,
       birthdate: appointment.birthdate,
       address: appointment.address,

@@ -37,7 +37,7 @@ export default function PersonalInfoPage() {
     const fetchPatient = async () => {
       try {
         setIsLoading(true);
-       const res = await fetch(`http://localhost:5000/api/patients/${patientId}`);
+       const res = await fetch(`http://localhost:5000/api/patient/${patientId}`);
 
         if (!res.ok) throw new Error("Erreur serveur");
         const data = await res.json();
@@ -82,7 +82,7 @@ export default function PersonalInfoPage() {
     setIsLoading(true);
     try {
       const { firstName, lastName, email, phone, birthDate, address } = formData;
-      const res = await fetch(`http://localhost:5000/api/patients/${patientId}`,  {
+      const res = await fetch(`http://localhost:5000/api/patient/${patientId}`,  {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
