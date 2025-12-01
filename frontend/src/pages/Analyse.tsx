@@ -54,20 +54,32 @@ export default function SkinAiAnalyzer() {
   };
 
   const handleAnalyze = async () => {
-    if (!image) return;
-    setLoading(true);
-    setResult(null);
+  if (!image) return;
+  setLoading(true);
+  setResult(null);
 
-    setTimeout(() => {
-      setResult({
-        diagnosis: "Dermatite atopique",
-        confidence: 87,
-        recommendation: "Consulter un dermatologue dans les 3 jours. Éviter les produits irritants et appliquer une crème hydratante adaptée.",
-        severity: "medium"
-      });
-      setLoading(false);
-    }, 2000);
-  };
+  const formData = new FormData();
+  formData.append("image", image);
+  formData.append("symptoms", JSON.stringify(selectedSymptoms));
+
+  try {
+    const res = await fetch("http://localhost:5000/api/ai/analyze", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!res.ok) throw new Error("Erreur serveur");
+
+    const data = await res.json();
+    setResult(data);
+  } catch (error) {
+    console.error(error);
+    toast.error("Erreur lors de l'analyse IA");
+  }
+
+  setLoading(false);
+};
+
 
   const getSeverityConfig = (severity: string) => {
     switch (severity) {
@@ -227,63 +239,15 @@ export default function SkinAiAnalyzer() {
 
             {/* Résultats */}
             <AnimatePresence>
-              {result && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Résultats de l'analyse</CardTitle>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-4">
-                      {/* Sévérité */}
-                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <span className="font-medium">Niveau de priorité</span>
-                        <Badge variant={getSeverityConfig(result.severity).variant}>
-                          {getSeverityConfig(result.severity).text}
-                        </Badge>
-                      </div>
+{result ? (
+  <div>
+    <p>{result.diagnosis}</p>
+    
+  </div>
+) : (
+  <p>Aucun résultat</p>
+)}
 
-                      {/* Diagnostic */}
-                      <div>
-                        <h4 className="font-semibold mb-2">Diagnostic probable</h4>
-                        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                          <p className="font-medium text-green-700">{result.diagnosis}</p>
-                        </div>
-                      </div>
-
-                      {/* Confiance */}
-                      <div>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span>Fiabilité de l'analyse</span>
-                          <span className="font-semibold">{result.confidence}%</span>
-                        </div>
-                        <Progress value={result.confidence} className="h-2" />
-                      </div>
-
-                      {/* Recommandation */}
-                      <div>
-                        <h4 className="font-semibold mb-2">Recommandation</h4>
-                        <p className="text-sm text-muted-foreground bg-blue-500/5 p-3 rounded-lg">
-                          {result.recommendation}
-                        </p>
-                      </div>
-
-                      {/* Avertissement */}
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <Shield className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                          <p className="text-xs text-amber-700">
-                            Analyse préliminaire uniquement. Consultez un dermatologue pour un diagnostic définitif.
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
         </div>

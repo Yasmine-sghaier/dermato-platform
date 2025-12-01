@@ -16,7 +16,7 @@ import User from "./models/User.js";
 import sequelize from './config/db.js'; 
 import Appointment from './models/Appointment.js';
 import prescriptionRoutes from "./routes/prescriptionRoutes.js";
-
+import aiRoutes from "./routes/aiRoutes.js";
 const app = express();
 
 
@@ -56,7 +56,7 @@ app.use("/api/appointments", appointmentRoutes);
 app.use("/api/patient",patientRoutes)
 app.use("/api/secretary", secretaryRoutes);
 app.use("/api/availability",availabilityRoutes)
-
+app.use("/api/ai", aiRoutes);
 app.use('/api/prescription', prescriptionRoutes);
 app.use("/api", roleRoutes); 
 app.get("/", (req, res) => {
