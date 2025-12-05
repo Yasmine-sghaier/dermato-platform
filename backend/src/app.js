@@ -13,6 +13,7 @@ import secretaryRoutes from "./routes/secretaryRoutes.js";
 import roleRoutes from "./routes/roleRoutes.js";
 import availabilityRoutes from "./routes/availabilityRoutes.js";
 import User from "./models/User.js"; 
+import Prescription from "./models/Prescription.js";
 import sequelize from './config/db.js'; 
 import Appointment from './models/Appointment.js';
 import prescriptionRoutes from "./routes/prescriptionRoutes.js";
@@ -45,6 +46,8 @@ const syncDB = async () => {
     // Crée la table si elle n’existe pas
     await Appointment.sync({ alter: true }); 
     console.log('Table Appointment créée ou mise à jour ✅');
+     await Prescription.sync({ alter: true });
+    console.log('Table Prescription créée ou mise à jour ✅')
   } catch (error) {
     console.error('Erreur lors de la synchronisation:', error);
   }
