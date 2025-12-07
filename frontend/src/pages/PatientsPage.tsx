@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Search, Filter, Plus, Calendar, Eye, Phone, Mail, Loader2, FileText } from "lucide-react";
 import PrescriptionPopup from "@/components/PrescriptionPopup";
+import { useNavigate } from "react-router-dom";
+
 
 interface ApiPatient {
   id: number;
@@ -36,6 +38,7 @@ interface FormattedPatient {
 }
 
 export default function PatientsPage() {
+  const navigate = useNavigate();
   const [patients, setPatients] = useState<ApiPatient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,16 +133,51 @@ export default function PatientsPage() {
     setIsPrescriptionOpen(false);
     setSelectedPatient(null);
   };
+const savePrescriptionToAPI = async (prescription) => {
+  try {
+    const token = getAuthToken();
 
-  // Sauvegarder la prescription
-  const handleSavePrescription = (prescription: any) => {
-    console.log('Prescription sauvegardée:', prescription);
-    // Ici vous pouvez envoyer la prescription à votre API
-    // Exemple: await savePrescription(prescription);
-    
-    // Afficher un message de succès
-    alert(`Prescription créée avec succès pour ${prescription.patientName}`);
-  };
+    const response = await fetch("http://localhost:5000/api/prescription/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        patientId: prescription.patientId,
+        medications: prescription.medications.map(m => m.name).join(", "),
+        dosage: prescription.medications.map(m => m.dosage).join(", "),
+        frequency: prescription.medications.map(m => m.frequency).join(", "),
+        duration: prescription.medications.map(m => m.duration).join(", "),
+        notes: prescription.instructions
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Erreur lors de la création");
+    }
+
+    return data;
+
+  } catch (error) {
+    console.error("Erreur API:", error);
+    throw error;
+  }
+};
+
+const handleSavePrescription = async (prescription) => {
+  try {
+    const result = await savePrescriptionToAPI(prescription);
+
+    alert(`Prescription créée avec succès !`);
+
+  } catch (error) {
+    alert("Erreur lors de la création de la prescription !");
+  }
+};
+
 
   // Formater les données pour l'affichage - CORRIGÉ
   const formattedPatients: FormattedPatient[] = patients.map(patient => {
@@ -201,7 +239,7 @@ export default function PatientsPage() {
     };
   });
 
-  console.log('📊 Patients formatés:', formattedPatients);
+ 
 
   // Filtrage des patients
   const filteredPatients = formattedPatients.filter(patient => {
@@ -453,10 +491,13 @@ export default function PatientsPage() {
                       <Eye className="h-4 w-4" />
                       Voir fiche
                     </Button>
-                    <Button variant="outline" size="sm" className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Affecter un RDV
-                    </Button>
+   <button
+  className="btn-outline"
+  onClick={() => navigate(`/prescriptions/${patient.id}`)}
+>
+  Voir prescriptions
+</button>
+
                     <Button 
                       size="sm" 
                       className="flex items-center gap-2"

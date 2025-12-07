@@ -50,7 +50,7 @@ export const login = async (req, res) => {
     res.status(500).json({ message: "Erreur serveur", error: error.message });
   }
 };
-// controllers/authController.js
+
 export const registerFromAppointment = async (req, res) => {
   try {
     const { token, password } = req.body;

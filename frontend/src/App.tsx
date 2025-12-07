@@ -16,6 +16,7 @@ import CreateAccountFromToken from "./pages/CreateAccountFormValues";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFoundPage from "./pages/Notfound";
 import Analyse from "./pages/Analyse";
+import PrescriptionsPage from "./pages/PrescriptionsPage";
 import { AuthProvider } from '@/hooks/Authcontext';
 
 const queryClient = new QueryClient();
@@ -63,6 +64,8 @@ const App = () => (
             </ProtectedRoute>
           }
         />
+        <Route path="/prescriptions/:patientId" element={<PrescriptionsPage />} />
+
      
    
       <Route path="/analyse" element={<Analyse />} />
