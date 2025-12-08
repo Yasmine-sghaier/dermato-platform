@@ -59,9 +59,9 @@ export const Navbar = () => {
               <Link to="/dermatologist/dashboard" className="text-sm font-medium text-primary">
                 Espace dermatologue
               </Link>
-            )}
+            )}  
             {role === "patient" && (
-              <Link to="/patient/dashboard" className="text-sm font-medium text-primary">
+              <Link to="/space/patient" className="text-sm font-medium text-primary">
                 Mon espace
               </Link>
             )}

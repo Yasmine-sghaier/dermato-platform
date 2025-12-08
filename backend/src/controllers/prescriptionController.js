@@ -120,6 +120,7 @@ export const generatePdf = async (req, res) => {
 
     // Format date
     const formatDate = (d) => {
+      if (!d) return "Non spécifié";
       const date = new Date(d);
       return date.toLocaleDateString("fr-FR", {
         day: "2-digit",
@@ -134,7 +135,7 @@ export const generatePdf = async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="ordonnance-${id}-${prescription.patient.name.replace(/\s+/g, "_")}.pdf"`
+      `attachment; filename="ordonnance-${id}.pdf"`
     );
 
     doc.pipe(res);
@@ -157,7 +158,8 @@ export const generatePdf = async (req, res) => {
 
     doc.moveDown(1);
 
-    doc.fontSize(10).font("Helvetica").fillColor("#666")
+    // Numéro et date
+    doc.fontSize(11).font("Helvetica").fillColor("#333")
       .text(`N°: ${id}`, { align: "right" });
     doc.text(`Date: ${formatDate(prescription.createdAt)}`, { align: "right" });
 
@@ -168,16 +170,18 @@ export const generatePdf = async (req, res) => {
       .text("INFORMATIONS PATIENT");
 
     doc.moveDown(0.5);
-    doc.rect(50, doc.y, 500, 70).fill("#f5f5f5").stroke("#ddd");
-
-    const pY = doc.y + 10;
+    
+    const pY = doc.y;
+    doc.rect(50, pY, 500, 70).fill("#f5f5f5").stroke("#ddd");
+    
     doc.fontSize(11).font("Helvetica").fillColor("#333")
-      .text(`Nom: ${prescription.patient.name}`, 60, pY);
-    doc.text(`ID: ${prescription.patientId}`, 60, pY + 20);
+      .text(`Nom: ${prescription.patient?.name || "Non spécifié"}`, 60, pY + 15);
+    doc.text(`ID: ${prescription.patientId || "N/A"}`, 60, pY + 35);
 
-    doc.text(`Âge: ${patientAge ? `${patientAge} ans` : "Non spécifié"}`, 300, pY);
-    if (prescription.patient.birthdate)
-      doc.text(`Naissance: ${formatDate(prescription.patient.birthdate)}`, 300, pY + 20);
+    doc.text(`Âge: ${patientAge ? `${patientAge} ans` : "Non spécifié"}`, 300, pY + 15);
+    if (prescription.patient?.birthdate) {
+      doc.text(`Naissance: ${formatDate(prescription.patient.birthdate)}`, 300, pY + 35);
+    }
 
     doc.y = pY + 80;
     doc.moveDown(1);
@@ -187,13 +191,14 @@ export const generatePdf = async (req, res) => {
       .text("MÉDECIN PRESCRIPTEUR");
 
     doc.moveDown(0.5);
-    doc.rect(50, doc.y, 500, 55).fill("#e8f4f8").stroke("#b8dde9");
-
-    const dY = doc.y + 10;
+    
+    const dY = doc.y;
+    doc.rect(50, dY, 500, 55).fill("#e8f4f8").stroke("#b8dde9");
+    
     doc.fontSize(11).font("Helvetica").fillColor("#333")
-      .text(`Docteur: ${DOCTOR_INFO.name}`, 60, dY);
-    doc.text(`Spécialité: ${DOCTOR_INFO.specialty}`, 60, dY + 20);
-    doc.text(`RPPS: ${DOCTOR_INFO.rpps}`, 300, dY);
+      .text(`Docteur: ${DOCTOR_INFO.name}`, 60, dY + 15);
+    doc.text(`Spécialité: ${DOCTOR_INFO.specialty}`, 60, dY + 35);
+    doc.text(`RPPS: ${DOCTOR_INFO.rpps}`, 300, dY + 15);
 
     doc.y = dY + 70;
     doc.moveDown(2);
@@ -208,94 +213,88 @@ export const generatePdf = async (req, res) => {
     doc.fontSize(12).font("Helvetica-Bold").fillColor("#333")
       .text("MÉDICAMENTS :");
 
-    doc.rect(50, doc.y, 500, 90).fill("#f0f9ff").stroke("#bae6fd");
+    const medY = doc.y + 5;
+    doc.rect(50, medY, 500, 80).fill("#f0f9ff").stroke("#bae6fd");
+    
     doc.fontSize(11).font("Helvetica").fillColor("#0c4a6e")
-      .text(prescription.medications, 60, doc.y + 10, {
+      .text(prescription.medications || "Non spécifié", 60, medY + 15, {
         width: 480,
         align: "left"
       });
 
-    doc.y += 110;
-    doc.moveDown(1);
+    doc.y = medY + 90;
+    doc.moveDown(2);
 
-    /* ------------------ POSOLOGIE ------------------ */
-    const posoY = doc.y;
-    const colWidth = 165;
+    /* ------------------ FRÉQUENCE ET DURÉE ------------------ */
+    // Section simple pour fréquence et durée
+    doc.fontSize(12).font("Helvetica-Bold").fillColor("#333")
+      .text("POSOLOGIE :");
+    
+    const posoY = doc.y + 5;
+    doc.rect(50, posoY, 500, 60).fill("#fefce8").stroke("#fde047");
+    
+    // Positionnement horizontal
+    doc.fontSize(11).font("Helvetica").fillColor("#713f12")
+      .text(`Fréquence: ${prescription.frequency || "Non spécifié"}`, 60, posoY + 20);
+    
+    doc.text(`Durée: ${prescription.duration || "Non spécifié"}`, 300, posoY + 20);
+    
+    // Dosage si existe
+    if (prescription.dosage) {
+      doc.text(`Dosage: ${prescription.dosage}`, 60, posoY + 40);
+    }
 
-    doc.fontSize(11).font("Helvetica-Bold").fillColor("#fff");
-
-    doc.rect(50, posoY, colWidth, 25).fill("#166534");
-    doc.text("DOSAGE", 50, posoY + 7, { width: colWidth, align: "center" });
-
-    doc.rect(50 + colWidth, posoY, colWidth, 25).fill("#92400e");
-    doc.text("FRÉQUENCE", 50 + colWidth, posoY + 7, { width: colWidth, align: "center" });
-
-    doc.rect(50 + colWidth * 2, posoY, colWidth, 25).fill("#86198f");
-    doc.text("DURÉE", 50 + colWidth * 2, posoY + 7, { width: colWidth, align: "center" });
-
-    doc.fontSize(12).font("Helvetica").fillColor("#000");
-
-    doc.rect(50, posoY + 25, colWidth, 40).fill("#f0fdf4").stroke("#bbf7d0");
-    doc.text(prescription.dosage, 50, posoY + 35, { width: colWidth, align: "center" });
-
-    doc.rect(50 + colWidth, posoY + 25, colWidth, 40).fill("#fef3c7").stroke("#fde68a");
-    doc.text(prescription.frequency, 50 + colWidth, posoY + 35, {
-      width: colWidth,
-      align: "center"
-    });
-
-    doc.rect(50 + colWidth * 2, posoY + 25, colWidth, 40).fill("#fae8ff").stroke("#f0abfc");
-    doc.text(prescription.duration, 50 + colWidth * 2, posoY + 35, {
-      width: colWidth,
-      align: "center"
-    });
-
-    doc.y = posoY + 90;
+    doc.y = posoY + 70;
     doc.moveDown(2);
 
     /* ------------------ NOTES ------------------ */
-    if (prescription.notes && prescription.notes.trim() !== "") {
-      doc.fontSize(12).font("Helvetica-Bold").fillColor("#7c2d12")
-        .text("INSTRUCTIONS SPÉCIALES :", 50, doc.y, {
-          width: 500,
-          align: "left"
-        });
+    doc.fontSize(12).font("Helvetica-Bold").fillColor("#7c2d12")
+      .text("INSTRUCTIONS SPÉCIALES :");
 
-      doc.rect(50, doc.y, 500, 100).fill("#fffbeb").stroke("#fbbf24");
+    const notesY = doc.y + 5;
+    const notesHeight = 80;
+    doc.rect(50, notesY, 500, notesHeight).fill("#fffbeb").stroke("#fbbf24");
 
-      doc.fontSize(11).font("Helvetica").fillColor("#92400e")
-        .text(prescription.notes, 60, doc.y + 10, {
-          width: 480,
-          align: "left"
-        });
+    doc.fontSize(11).font("Helvetica").fillColor("#92400e")
+      .text(prescription.notes || "Aucune instruction spéciale", 60, notesY + 15, {
+        width: 480,
+        align: "left"
+      });
 
-      doc.y += 120;
-    }
+    doc.y = notesY + notesHeight + 10;
 
     /* ------------------ SIGNATURE ------------------ */
-    doc.moveDown(2);
+    // S'assurer d'être assez bas sur la page
+    if (doc.y < 650) {
+      doc.moveDown(4);
+    } else {
+      doc.addPage();
+      doc.y = 100;
+    }
 
-    doc.moveTo(330, doc.y).lineTo(550, doc.y).stroke();
+    // Ligne de signature
+    const signatureY = doc.y;
+    doc.moveTo(330, signatureY).lineTo(550, signatureY).stroke("#000");
 
     doc.fontSize(10).font("Helvetica-Oblique").fillColor("#666")
-      .text("Signature et cachet", 330, doc.y + 5, {
+      .text("Signature et cachet", 330, signatureY + 5, {
         width: 220,
         align: "center"
       });
 
     doc.fontSize(12).font("Helvetica-Bold").fillColor("#000")
-      .text(DOCTOR_INFO.name, 330, doc.y + 25, {
+      .text(DOCTOR_INFO.name, 330, signatureY + 25, {
         width: 220,
         align: "center"
       });
 
     doc.fontSize(10).font("Helvetica").fillColor("#666")
-      .text(DOCTOR_INFO.specialty, 330, doc.y + 45, {
+      .text(DOCTOR_INFO.specialty, 330, signatureY + 45, {
         width: 220,
         align: "center"
       });
 
-    doc.text(CLINIC_INFO.name, 330, doc.y + 60, {
+    doc.text(CLINIC_INFO.name, 330, signatureY + 60, {
       width: 220,
       align: "center"
     });
@@ -305,7 +304,7 @@ export const generatePdf = async (req, res) => {
       .text(
         `Document généré électroniquement le ${new Date().toLocaleDateString("fr-FR")}`,
         50,
-        792,
+        800,
         { align: "center", width: 500 }
       );
 

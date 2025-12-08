@@ -183,3 +183,18 @@ export const createAppointmentForPatient = async (req, res) => {
     });
   }
 };
+export const blockDate = async (req, res) => {
+  const { date, reason } = req.body;
+
+  try {
+    await Appointment.create({
+      requested_date: `${date}T00:00:00`,
+      status: "blocked",
+      reason: reason || "Congé"
+    });
+
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+};

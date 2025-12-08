@@ -18,6 +18,7 @@ import NotFoundPage from "./pages/Notfound";
 import Analyse from "./pages/Analyse";
 import PrescriptionsPage from "./pages/PrescriptionsPage";
 import { AuthProvider } from '@/hooks/Authcontext';
+import AgendaPage from "./pages/AgendaPage";
 
 const queryClient = new QueryClient();
 
@@ -69,6 +70,7 @@ const App = () => (
      
    
       <Route path="/analyse" element={<Analyse />} />
+      <Route path="/agenda" element={<AgendaPage/>} />
     
 
         {/* Page d’accès refusé */}

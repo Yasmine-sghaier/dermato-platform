@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, Users, Clock, Check, X, Phone, Mail, Search, Filter, User, MapPin, Cake } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
-
+import { useNavigate } from "react-router-dom";
 type AppointmentRequest = {
   id: string;
   name: string;
@@ -21,6 +21,7 @@ type AppointmentRequest = {
 };
 
 export default function SecretaryDashboard() {
+    const navigate = useNavigate();
   const [requests, setRequests] = useState<AppointmentRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<AppointmentRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -613,10 +614,14 @@ export default function SecretaryDashboard() {
                 <CardTitle className="text-lg">Actions rapides</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Voir l'agenda complet
-                </Button>
+              <Button
+  variant="outline"
+  className="w-full justify-start"
+  onClick={() => navigate("/agenda")}
+>
+  <Calendar className="mr-2 h-4 w-4" />
+  Voir l'agenda complet
+</Button>
                 <Button variant="outline" className="w-full justify-start">
                   <Users className="mr-2 h-4 w-4" />
                   Liste des patients
