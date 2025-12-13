@@ -1,5 +1,6 @@
 
 import Appointment from "../models/Appointment.js";
+import BlockedDate from "../models/BlockedDate.js";
 import { Op } from "sequelize";
 
 const WORKING_HOURS = {
@@ -22,13 +23,31 @@ export const getAvailableDates = async (req, res) => {
 
     const availableDates = [];
 
+    // Récupérer tous les jours bloqués dans cette période
+    const blockedDates = await BlockedDate.findAll({
+      where: {
+        blocked_date: {
+          [Op.between]: [
+            today.toISOString().split('T')[0],
+            threeMonthsLater.toISOString().split('T')[0]
+          ]
+        }
+      },
+      attributes: ['blocked_date']
+    });
+
+    const blockedDatesSet = new Set(
+      blockedDates.map(bd => bd.blocked_date.toISOString().split('T')[0])
+    );
+
     // available  dates for 3 next  month 
     for (let d = new Date(today); d <= threeMonthsLater; d.setDate(d.getDate() + 1)) {
       const dayOfWeek = d.getDay();
+      const dateStr = d.toISOString().split('T')[0];
       
-    
-      if (WORKING_DAYS.includes(dayOfWeek)) {
-        availableDates.push(d.toISOString().split('T')[0]);
+      // Vérifier si c'est un jour ouvré et non bloqué
+      if (WORKING_DAYS.includes(dayOfWeek) && !blockedDatesSet.has(dateStr)) {
+        availableDates.push(dateStr);
       }
     }
 
@@ -82,6 +101,20 @@ export const getAvailableSlots = async (req, res) => {
         date,
         availableSlots: [],
         message: "Date passée"
+      });
+    }
+
+    // Vérifier si la date est bloquée
+    const blockedDate = await BlockedDate.findOne({
+      where: { blocked_date: date }
+    });
+
+    if (blockedDate) {
+      return res.json({
+        success: true,
+        date,
+        availableSlots: [],
+        message: "Jour bloqué (congé médecin)"
       });
     }
 
@@ -171,6 +204,19 @@ export const checkSlotAvailability = async (req, res) => {
         success: true,
         available: false,
         reason: "Jour non ouvré"
+      });
+    }
+
+    // Vérifier si la date est bloquée
+    const blockedDate = await BlockedDate.findOne({
+      where: { blocked_date: date }
+    });
+
+    if (blockedDate) {
+      return res.json({
+        success: true,
+        available: false,
+        reason: "Jour bloqué (congé médecin)"
       });
     }
 

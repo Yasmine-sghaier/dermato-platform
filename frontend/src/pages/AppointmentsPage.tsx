@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useAuth } from "@/hooks/Authcontext";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Calendar, Clock, User, Phone, MapPin, Cake, ArrowLeft, ArrowRight, Loader2, Ban, Check } from "lucide-react";
 
-const appointmentSchema = z.object({
+// Schéma pour visiteur (non connecté)
+const appointmentSchemaVisitor = z.object({
   date: z.string().min(1, "La date est requise"),
   time: z.string().min(1, "L'heure est requise"),
   firstName: z.string().min(2, "Le prénom doit contenir au moins 2 caractères"),
@@ -23,7 +25,19 @@ const appointmentSchema = z.object({
   birthDate: z.string().min(1, "La date de naissance est requise"),
 });
 
-type AppointmentFormValues = z.infer<typeof appointmentSchema>;
+// Schéma pour patient connecté (champs optionnels car déjà dans le compte)
+const appointmentSchemaPatient = z.object({
+  date: z.string().min(1, "La date est requise"),
+  time: z.string().min(1, "L'heure est requise"),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  birthDate: z.string().optional(),
+});
+
+type AppointmentFormValues = z.infer<typeof appointmentSchemaVisitor>;
 
 type Step = "date" | "time" | "form";
 
@@ -41,17 +55,23 @@ type TimeSlot = {
 
 export default function CreateAppointment() {
   const navigate = useNavigate();
+  const { isLoggedIn, user, role } = useAuth();
+  const isPatient = isLoggedIn && role === "patient";
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<Step>("date");
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [blockedDatesInfo, setBlockedDatesInfo] = useState<Map<string, { reason: string }>>(new Map());
   const [loadingDates, setLoadingDates] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loadingPatientInfo, setLoadingPatientInfo] = useState(false);
+  const [patientInfo, setPatientInfo] = useState<any>(null);
   const [minDate, setMinDate] = useState<string>("");
   const [maxDate, setMaxDate] = useState<string>("");
+  const [selectedDateBlocked, setSelectedDateBlocked] = useState<{ isBlocked: boolean; reason?: string }>({ isBlocked: false });
 
-  // Charger les dates disponibles au montage du composant
+  // Charger les dates disponibles et les jours bloqués au montage du composant
   useEffect(() => {
     const fetchAvailableDates = async () => {
       setLoadingDates(true);
@@ -70,20 +90,110 @@ export default function CreateAppointment() {
       }
     };
 
+    const fetchBlockedDates = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get("http://localhost:5000/api/blocked-dates", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (response.data.success) {
+          const blockedMap = new Map<string, { reason: string }>();
+          response.data.data.forEach((bd: { blocked_date: string; reason: string }) => {
+            const dateStr = new Date(bd.blocked_date).toISOString().split('T')[0];
+            blockedMap.set(dateStr, { reason: bd.reason });
+          });
+          setBlockedDatesInfo(blockedMap);
+        }
+      } catch (error) {
+        // Si l'utilisateur n'est pas authentifié, on ignore l'erreur
+        console.log("Impossible de charger les jours bloqués (normal si non authentifié)");
+      }
+    };
+
+    const fetchPatientInfo = async () => {
+      if (isPatient && user?.id) {
+        setLoadingPatientInfo(true);
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get(`http://localhost:5000/api/patient/${user.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          // L'API retourne directement l'objet patient
+          if (response.data) {
+            setPatientInfo(response.data);
+          }
+        } catch (error) {
+          console.error("Erreur chargement infos patient:", error);
+        } finally {
+          setLoadingPatientInfo(false);
+        }
+      }
+    };
+
     fetchAvailableDates();
-  }, []);
+    fetchBlockedDates();
+    fetchPatientInfo();
+  }, [isPatient, user?.id]);
+
+  // Vérifier si une date est bloquée
+  const checkIfDateBlocked = async (date: string) => {
+    // D'abord vérifier dans la map locale (plus rapide)
+    const blockedInfo = blockedDatesInfo.get(date);
+    if (blockedInfo) {
+      return {
+        isBlocked: true,
+        reason: blockedInfo.reason
+      };
+    }
+    
+    // Si pas dans la map locale, vérifier via l'API (seulement si nécessaire)
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:5000/api/blocked-dates/check/${date}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      
+      if (response.data.success && response.data.isBlocked) {
+        return {
+          isBlocked: true,
+          reason: response.data.data?.reason || 'Congé médecin'
+        };
+      }
+    } catch (error) {
+      // Si l'API échoue, on assume que la date n'est pas bloquée
+      // (pour éviter de bloquer toutes les dates en cas d'erreur)
+      console.log("Erreur vérification date bloquée:", error);
+    }
+    
+    return { isBlocked: false };
+  };
 
   // Charger la disponibilité des créneaux quand une date est sélectionnée
   const handleDateSelect = async (date: string) => {
     setSelectedDate(date);
     setLoadingSlots(true);
+    setSelectedDateBlocked({ isBlocked: false }); // Réinitialiser le statut
     
     try {
       // Récupérer les créneaux disponibles pour cette date
       const response = await axios.get(`http://localhost:5000/api/availability/slots/${date}`);
       
       if (response.data.success) {
-        const availableSlots = response.data.availableSlots;
+        // Vérifier si le message indique que c'est un jour bloqué
+        const message = response.data.message || '';
+        if (message.includes('bloqué') || message.includes('congé')) {
+          const blockedStatus = {
+            isBlocked: true,
+            reason: 'Congé médecin'
+          };
+          setSelectedDateBlocked(blockedStatus);
+          toast.error("Cette date est indisponible : Médecin en congé");
+          setTimeSlots([]);
+          return;
+        }
+        
+        // Si ce n'est pas un jour bloqué, procéder normalement
+        const availableSlots = response.data.availableSlots || [];
         
         // Créer la liste complète des créneaux avec leur disponibilité
         const allSlotsWithAvailability: TimeSlot[] = ALL_TIME_SLOTS.map(slot => ({
@@ -93,34 +203,82 @@ export default function CreateAppointment() {
         
         setTimeSlots(allSlotsWithAvailability);
         appointmentForm.setValue("date", date);
+        
+        // Si patient connecté, passer directement à la soumission après sélection de l'heure
+        // Sinon, passer à l'étape formulaire
         setCurrentStep("time");
+      } else {
+        // Si l'API retourne success: false, vérifier si c'est bloqué
+        const blockedStatus = await checkIfDateBlocked(date);
+        if (blockedStatus.isBlocked) {
+          setSelectedDateBlocked(blockedStatus);
+          toast.error(`Cette date est indisponible : ${blockedStatus.reason || 'Médecin en congé'}`);
+          setTimeSlots([]);
+        } else {
+          toast.error("Erreur lors du chargement des créneaux");
+          setTimeSlots([]);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erreur chargement créneaux:", error);
-      toast.error("Erreur lors du chargement des créneaux disponibles");
       
-      // En cas d'erreur, afficher tous les créneaux comme indisponibles
-      const fallbackSlots: TimeSlot[] = ALL_TIME_SLOTS.map(slot => ({
-        time: slot,
-        available: false
-      }));
-      setTimeSlots(fallbackSlots);
+      // En cas d'erreur réseau, vérifier si c'est un jour bloqué (vérification locale)
+      const blockedInfo = blockedDatesInfo.get(date);
+      if (blockedInfo) {
+        setSelectedDateBlocked({
+          isBlocked: true,
+          reason: blockedInfo.reason
+        });
+        toast.error(`Cette date est indisponible : ${blockedInfo.reason}`);
+        setTimeSlots([]);
+      } else {
+        toast.error("Erreur lors du chargement des créneaux disponibles");
+        // Afficher tous les créneaux comme indisponibles en cas d'erreur
+        const fallbackSlots: TimeSlot[] = ALL_TIME_SLOTS.map(slot => ({
+          time: slot,
+          available: false
+        }));
+        setTimeSlots(fallbackSlots);
+      }
     } finally {
       setLoadingSlots(false);
     }
   };
 
-  const handleTimeSelect = (time: string, available: boolean) => {
+  const handleTimeSelect = async (time: string, available: boolean) => {
     if (!available) {
       toast.error("Ce créneau n'est pas disponible");
       return;
     }
     appointmentForm.setValue("time", time);
-    setCurrentStep("form");
+    
+    // Si patient connecté avec toutes les infos, soumettre directement
+    if (isPatient && patientInfo) {
+      const formValues = appointmentForm.getValues();
+      // Préparer les données avec les infos du patient
+      const submitData = {
+        ...formValues,
+        firstName: formValues.firstName || patientInfo.name?.split(' ')[0] || '',
+        lastName: formValues.lastName || patientInfo.name?.split(' ').slice(1).join(' ') || '',
+        email: formValues.email || patientInfo.email || '',
+        phone: formValues.phone || patientInfo.phone || '',
+        address: formValues.address || patientInfo.address || '',
+        birthDate: formValues.birthDate || patientInfo.birthdate || '',
+      };
+      await onAppointmentSubmit(submitData);
+    } else {
+      // Sinon, afficher le formulaire
+      setCurrentStep("form");
+    }
+  };
+
+  // Créer le schéma conditionnel
+  const getAppointmentSchema = () => {
+    return isPatient ? appointmentSchemaPatient : appointmentSchemaVisitor;
   };
 
   const appointmentForm = useForm<AppointmentFormValues>({
-    resolver: zodResolver(appointmentSchema),
+    resolver: zodResolver(getAppointmentSchema()),
     defaultValues: {
       date: "",
       time: "",
@@ -133,19 +291,60 @@ export default function CreateAppointment() {
     },
   });
 
+  // Pré-remplir le formulaire avec les données du patient si connecté
+  useEffect(() => {
+    if (isPatient && patientInfo) {
+      const nameParts = patientInfo.name?.split(' ') || [];
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      appointmentForm.reset({
+        date: appointmentForm.getValues("date") || "",
+        time: appointmentForm.getValues("time") || "",
+        firstName: firstName,
+        lastName: lastName,
+        email: patientInfo.email || "",
+        phone: patientInfo.phone || "",
+        address: patientInfo.address || "",
+        birthDate: patientInfo.birthdate || "",
+      });
+    }
+  }, [patientInfo, isPatient]);
+
   const onAppointmentSubmit = async (data: AppointmentFormValues) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
       
+      // Vérifier si la date est bloquée avant de créer le RDV
+      const blockedStatus = await checkIfDateBlocked(data.date);
+      if (blockedStatus.isBlocked) {
+        toast.error(`Cette date est indisponible : ${blockedStatus.reason || 'Médecin en congé'}`);
+        setCurrentStep("date");
+        setSelectedDateBlocked(blockedStatus);
+        setLoading(false);
+        return;
+      }
+      
       // Préparer les données pour l'API
-      const appointmentData = {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone,
-        address: data.address,
-        birthDate: data.birthDate,
+      // Si patient connecté, utiliser les données du compte, sinon utiliser les données du formulaire
+      const appointmentData = isPatient && patientInfo ? {
+        firstName: data.firstName || patientInfo.name?.split(' ')[0] || '',
+        lastName: data.lastName || patientInfo.name?.split(' ').slice(1).join(' ') || '',
+        email: data.email || patientInfo.email || '',
+        phone: data.phone || patientInfo.phone || '',
+        address: data.address || patientInfo.address || '',
+        birthDate: data.birthDate || patientInfo.birthdate || '',
+        date: data.date,
+        time: data.time,
+        user_id: user?.id // Lier le rendez-vous au compte utilisateur
+      } : {
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        birthDate: data.birthDate || '',
         date: data.date,
         time: data.time
       };
@@ -164,8 +363,16 @@ export default function CreateAppointment() {
       );
 
       if (!availabilityCheck.data.available) {
-        toast.error("Ce créneau n'est plus disponible. Veuillez choisir un autre horaire.");
-        setCurrentStep("time");
+        const reason = availabilityCheck.data.reason || "indisponible";
+        if (reason.includes("bloqué") || reason.includes("congé")) {
+          toast.error(`Cette date est indisponible : Médecin en congé`);
+          setCurrentStep("date");
+          setSelectedDateBlocked({ isBlocked: true, reason: "Congé médecin" });
+        } else {
+          toast.error("Ce créneau n'est plus disponible. Veuillez choisir un autre horaire.");
+          setCurrentStep("time");
+        }
+        setLoading(false);
         return;
       }
 
@@ -180,10 +387,17 @@ export default function CreateAppointment() {
       
       // Redirection après succès
       const role = localStorage.getItem("role");
-      if (role === "patient") navigate("/patient/dashboard");
-      else if (role === "secretary") navigate("/secretary/dashboard");
-      else if (role === "dermatologist") navigate("/dermatologist/dashboard");
-      else navigate("/");
+      if (role === "patient") {
+        navigate("/space/patient");
+      } else if (role === "secretary") {
+        navigate("/secretary/dashboard");
+      } else if (role === "dermatologist") {
+        navigate("/dermatologist/dashboard");
+      } else {
+        // Visiteur non connecté
+        toast.info("Rendez-vous créé ! Connectez-vous pour voir vos rendez-vous.");
+        navigate("/login");
+      }
       
     } catch (err: any) {
       console.error("Erreur création RDV:", err);
@@ -268,7 +482,19 @@ export default function CreateAppointment() {
   // Vérifier si on peut passer à l'étape suivante
   const canProceed = () => {
     if (currentStep === "date") return !!selectedDate;
-    if (currentStep === "time") return !!appointmentForm.watch("time");
+    if (currentStep === "time") {
+      const time = appointmentForm.watch("time");
+      // Si patient connecté, on peut soumettre directement après sélection de l'heure
+      if (isPatient && time) {
+        return true;
+      }
+      return !!time;
+    }
+    // Pour l'étape formulaire, vérifier les champs requis seulement si visiteur
+    if (currentStep === "form" && !isPatient) {
+      const values = appointmentForm.getValues();
+      return !!(values.firstName && values.lastName && values.email && values.phone);
+    }
     return true;
   };
 
@@ -340,13 +566,29 @@ export default function CreateAppointment() {
                                   className={getDateInputClass(selectedDate)}
                                   min={minDate}
                                   max={maxDate}
-                                  onChange={(e) => {
+                                  onChange={async (e) => {
                                     const date = e.target.value;
-                                    if (isDateAvailable(date)) {
-                                      handleDateSelect(date);
-                                    } else {
-                                      setSelectedDate(date);
+                                    setSelectedDate(date);
+                                    setSelectedDateBlocked({ isBlocked: false });
+                                    
+                                    // Si la date n'est pas dans la liste des dates disponibles
+                                    if (!isDateAvailable(date)) {
+                                      // Vérifier si c'est parce qu'elle est bloquée (vérification locale rapide)
+                                      const blockedInfo = blockedDatesInfo.get(date);
+                                      if (blockedInfo) {
+                                        setSelectedDateBlocked({
+                                          isBlocked: true,
+                                          reason: blockedInfo.reason
+                                        });
+                                        toast.error(`Cette date est indisponible : ${blockedInfo.reason}`);
+                                        return;
+                                      }
+                                      // Si ce n'est pas bloqué mais pas disponible, c'est peut-être un weekend ou date passée
+                                      // On laisse l'utilisateur essayer quand même
                                     }
+                                    
+                                    // Procéder avec la sélection de date (même si pas dans availableDates)
+                                    handleDateSelect(date);
                                   }}
                                   value={selectedDate}
                                   disabled={loadingDates}
@@ -355,10 +597,26 @@ export default function CreateAppointment() {
                             </div>
                           </FormControl>
                           <FormMessage />
-                          {selectedDate && !isDateAvailable(selectedDate) && (
-                            <p className="text-sm text-destructive mt-2">
-                              Cette date n'est pas disponible. Veuillez choisir une autre date.
-                            </p>
+                          {selectedDate && selectedDateBlocked.isBlocked && (
+                            <div className="mt-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                              <div className="flex items-start gap-3">
+                                <Ban className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold text-red-800 mb-1">
+                                    Date indisponible
+                                  </p>
+                                  <p className="text-sm text-red-700">
+                                    {selectedDateBlocked.reason 
+                                      ? `Le médecin est en congé : ${selectedDateBlocked.reason}`
+                                      : "Le médecin est en congé. Cette date n'est pas disponible pour les rendez-vous."
+                                    }
+                                  </p>
+                                  <p className="text-xs text-red-600 mt-2">
+                                    Veuillez choisir une autre date disponible.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </FormItem>
                       )}
@@ -445,12 +703,12 @@ export default function CreateAppointment() {
                   </div>
                 )}
 
-                {/* ÉTAPE 3 : Formulaire d'informations */}
-                {currentStep === "form" && (
+                {/* ÉTAPE 3 : Formulaire d'informations (seulement pour les visiteurs) */}
+                {currentStep === "form" && !isPatient && (
                   <div className="space-y-6">
                     <div className="text-center mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-lg font-semibold text-blue-800">
-                        Rendez-vous  pour le {selectedDate && new Date(selectedDate).toLocaleDateString('fr-FR')} à {appointmentForm.watch("time")}
+                        Rendez-vous pour le {selectedDate && new Date(selectedDate).toLocaleDateString('fr-FR')} à {appointmentForm.watch("time")}
                       </p>
                     </div>
 
@@ -538,7 +796,7 @@ export default function CreateAppointment() {
                       name="address"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Adresse</FormLabel>
+                          <FormLabel>Adresse *</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -555,7 +813,7 @@ export default function CreateAppointment() {
                       name="birthDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Date de naissance</FormLabel>
+                          <FormLabel>Date de naissance *</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <Cake className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -571,6 +829,16 @@ export default function CreateAppointment() {
                         </FormItem>
                       )}
                     />
+                  </div>
+                )}
+
+                {/* Message pour patient connecté après sélection de l'heure */}
+                {currentStep === "time" && isPatient && patientInfo && (
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800">
+                      <Check className="inline h-4 w-4 mr-2" />
+                      Vos informations sont déjà enregistrées. Cliquez sur un créneau pour confirmer votre rendez-vous.
+                    </p>
                   </div>
                 )}
 
@@ -592,7 +860,7 @@ export default function CreateAppointment() {
                       type="submit" 
                       className="flex-1 flex items-center gap-2 bg-blue-600 hover:bg-blue-700" 
                       size="lg" 
-                      disabled={loading}
+                      disabled={loading || loadingPatientInfo}
                     >
                       {loading ? (
                         <>
@@ -602,7 +870,7 @@ export default function CreateAppointment() {
                       ) : (
                         <>
                           <Check className="w-4 h-4 mr-2" />
-                          créer le rendez-vous
+                          {isPatient ? "Confirmer le rendez-vous" : "Créer le rendez-vous"}
                           <ArrowRight className="w-4 h-4" />
                         </>
                       )}

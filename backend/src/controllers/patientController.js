@@ -1,6 +1,7 @@
 
 import User from "../models/User.js";
 import Appointment from "../models/Appointment.js";
+import { Op } from "sequelize";
 // Récupérer un patient par ID
 export const getPatientById = async (req, res) => {
   try {
@@ -55,15 +56,95 @@ export const getPatientAppointments = async (req, res) => {
   try {
     const userId = req.user.id; // récupéré par le middleware
 
+    // Récupérer l'utilisateur pour obtenir son email
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouvé"
+      });
+    }
+
+    const userEmail = user.email;
+
+    // Récupérer les rendez-vous liés au user_id OU à l'email (pour les rendez-vous créés avant la création du compte)
     const appointments = await Appointment.findAll({
-      where: { user_id: userId }, // ou patientId selon ton modèle
-      order: [["requested_date", "ASC"]] // tri par date
+      where: {
+        [Op.or]: [
+          { user_id: userId },
+          { email: userEmail, user_id: null } // Rendez-vous créés avec cet email avant la création du compte
+        ]
+      },
+      order: [["requested_date", "DESC"]], // tri par date (plus récent en premier)
+      attributes: [
+        'id',
+        'name',
+        'email',
+        'phone',
+        'address',
+        'birthdate',
+        'requested_date',
+        'status',
+        'created_by',
+        'user_id',
+        'created_at',
+        'updated_at'
+      ]
     });
 
-    res.json(appointments);
+    // Si certains rendez-vous n'ont pas de user_id, les lier maintenant
+    const appointmentsToLink = appointments.filter(apt => !apt.user_id);
+    if (appointmentsToLink.length > 0) {
+      await Promise.all(
+        appointmentsToLink.map(apt => 
+          apt.update({ user_id: userId })
+        )
+      );
+      // Recharger les rendez-vous après la mise à jour
+      const updatedAppointments = await Appointment.findAll({
+        where: {
+          [Op.or]: [
+            { user_id: userId },
+            { email: userEmail, user_id: null }
+          ]
+        },
+        order: [["requested_date", "DESC"]],
+        attributes: [
+          'id',
+          'name',
+          'email',
+          'phone',
+          'address',
+          'birthdate',
+          'requested_date',
+          'status',
+          'notes',
+          'created_by',
+          'user_id',
+          'created_at',
+          'updated_at'
+        ]
+      });
+      
+      return res.json({
+        success: true,
+        data: updatedAppointments,
+        count: updatedAppointments.length
+      });
+    }
+
+    res.json({
+      success: true,
+      data: appointments,
+      count: appointments.length
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error("Erreur récupération rendez-vous patient:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Erreur serveur",
+      error: error.message
+    });
   }
 };
 

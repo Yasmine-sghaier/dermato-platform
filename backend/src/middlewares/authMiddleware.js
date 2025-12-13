@@ -40,12 +40,18 @@ export const authorizeRoles = (...roles) => {
 export const authenticateUser = (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ message: "Non autorisé" });
+    if (!token) {
+      // Si pas de token, on continue quand même (pour les visiteurs)
+      req.user = null;
+      return next();
+    }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET); // decode le token
-    req.user = { id: decoded.id, role: decoded.role };
+    req.user = { id: decoded.id, role: decoded.role, email: decoded.email };
     next();
   } catch (error) {
-    res.status(401).json({ message: "Token invalide" });
+    // Si le token est invalide, on continue quand même (pour les visiteurs)
+    req.user = null;
+    next();
   }
 };

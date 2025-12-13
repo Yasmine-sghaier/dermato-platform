@@ -29,7 +29,8 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
-  CalendarDays
+  CalendarDays,
+  Lock
 } from "lucide-react";
 import { 
   format, 
@@ -52,10 +53,13 @@ import {
   getMinutes,
   isPast,
   isFuture,
-  parse
+  parse,
+  isBefore
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import axios from "axios";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 
 // Types basés sur votre modèle
 interface Appointment {
@@ -105,6 +109,13 @@ interface AppointmentFormData {
   reason: string;
 }
 
+interface BlockedDate {
+  id: number;
+  blocked_date: string;
+  reason: string;
+  created_by?: number;
+}
+
 // Constantes pour les horaires de travail
 const WORKING_HOURS = {
   start: 8,
@@ -116,6 +127,8 @@ const WORKING_HOURS = {
 const SLOT_DURATION = 30; // minutes
 
 export default function CalendarAppointment() {
+  const { isSecretary } = useAuth();
+  
   // États principaux
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -124,8 +137,12 @@ export default function CalendarAppointment() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loadingBlockedDates, setLoadingBlockedDates] = useState(false);
   const [showNewAppointmentForm, setShowNewAppointmentForm] = useState(false);
   const [newAppointmentData, setNewAppointmentData] = useState<AppointmentFormData>({
     name: '',
@@ -215,6 +232,205 @@ export default function CalendarAppointment() {
     }
   };
 
+  // Récupération des jours bloqués
+  const fetchBlockedDates = async () => {
+    setLoadingBlockedDates(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/api/blocked-dates', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (response.data.success) {
+        const datesSet = new Set(
+          response.data.data.map((bd: BlockedDate) => 
+            new Date(bd.blocked_date).toISOString().split('T')[0]
+          )
+        );
+        setBlockedDates(datesSet);
+      }
+    } catch (error) {
+      console.error('Erreur chargement jours bloqués:', error);
+    } finally {
+      setLoadingBlockedDates(false);
+    }
+  };
+
+  // Bloquer un jour
+  const blockDate = async (date: Date, reason?: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const dateStr = format(date, 'yyyy-MM-dd');
+      
+      const response = await axios.post(
+        'http://localhost:5000/api/blocked-dates',
+        {
+          blocked_date: dateStr,
+          reason: reason || 'Congé médecin'
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data.success) {
+        setBlockedDates(prev => new Set([...prev, dateStr]));
+        toast({
+          title: "Date bloquée",
+          description: `Le ${format(date, 'dd/MM/yyyy')} a été bloqué avec succès.`,
+        });
+        // Recharger les créneaux disponibles
+        fetchAvailableSlots(selectedDate);
+      }
+    } catch (error: any) {
+      console.error('Erreur blocage date:', error);
+      toast({
+        title: "Erreur",
+        description: error.response?.data?.message || "Impossible de bloquer cette date.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Débloquer un jour
+  const unblockDate = async (date: Date) => {
+    try {
+      const token = localStorage.getItem('token');
+      const dateStr = format(date, 'yyyy-MM-dd');
+      
+      const response = await axios.delete(
+        `http://localhost:5000/api/blocked-dates/date/${dateStr}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data.success) {
+        setBlockedDates(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(dateStr);
+          return newSet;
+        });
+        toast({
+          title: "Date débloquée",
+          description: `Le ${format(date, 'dd/MM/yyyy')} est maintenant disponible.`,
+        });
+        // Recharger les créneaux disponibles
+        fetchAvailableSlots(selectedDate);
+      }
+    } catch (error: any) {
+      console.error('Erreur déblocage date:', error);
+      toast({
+        title: "Erreur",
+        description: error.response?.data?.message || "Impossible de débloquer cette date.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Bloquer plusieurs jours en une fois
+  const blockMultipleDates = async (dates: string[], reason?: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.post(
+        'http://localhost:5000/api/blocked-dates/multiple',
+        {
+          dates,
+          reason: reason || 'Congé médecin'
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data.success) {
+        // Ajouter les nouvelles dates bloquées
+        const newBlockedDates = new Set(blockedDates);
+        response.data.data.forEach((bd: BlockedDate) => {
+          const dateStr = new Date(bd.blocked_date).toISOString().split('T')[0];
+          newBlockedDates.add(dateStr);
+        });
+        setBlockedDates(newBlockedDates);
+        
+        // Réinitialiser la sélection
+        setSelectedDates(new Set());
+        setIsMultiSelectMode(false);
+        
+        toast({
+          title: "Dates bloquées",
+          description: `${response.data.stats.created} date(s) bloquée(s) avec succès.`,
+        });
+        
+        // Recharger les créneaux disponibles
+        fetchAvailableSlots(selectedDate);
+        fetchBlockedDates();
+      }
+    } catch (error: any) {
+      console.error('Erreur blocage dates multiples:', error);
+      toast({
+        title: "Erreur",
+        description: error.response?.data?.message || "Impossible de bloquer ces dates.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Débloquer plusieurs jours en une fois
+  const unblockMultipleDates = async (dates: string[]) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Débloquer chaque date
+      const promises = dates.map(dateStr => 
+        axios.delete(
+          `http://localhost:5000/api/blocked-dates/date/${dateStr}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          }
+        )
+      );
+
+      const results = await Promise.allSettled(promises);
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      
+      // Mettre à jour les dates bloquées
+      const newBlockedDates = new Set(blockedDates);
+      dates.forEach(dateStr => newBlockedDates.delete(dateStr));
+      setBlockedDates(newBlockedDates);
+      
+      // Réinitialiser la sélection
+      setSelectedDates(new Set());
+      setIsMultiSelectMode(false);
+      
+      toast({
+        title: "Dates débloquées",
+        description: `${successCount} date(s) débloquée(s) avec succès.`,
+      });
+      
+      // Recharger les créneaux disponibles
+      fetchAvailableSlots(selectedDate);
+      fetchBlockedDates();
+    } catch (error: any) {
+      console.error('Erreur déblocage dates multiples:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de débloquer ces dates.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Récupération des créneaux disponibles
   const fetchAvailableSlots = async (date: Date) => {
     setLoadingSlots(true);
@@ -287,6 +503,7 @@ export default function CalendarAppointment() {
   // Chargement initial et quand la date change
   useEffect(() => {
     fetchAppointments();
+    fetchBlockedDates();
   }, []);
 
   useEffect(() => {
@@ -373,23 +590,90 @@ export default function CalendarAppointment() {
     const isCurrentMonth = isSameMonth(day, currentDate);
     const isWeekendDay = isWeekend(day);
     const isPastDay = isPast(day) && !isCurrentDay;
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const isBlocked = blockedDates.has(dateStr);
+    const isMultiSelected = selectedDates.has(dateStr);
     
     const dayAppointments = getAppointmentsForDate(day);
     const confirmedCount = dayAppointments.filter(a => a.status === 'confirmed').length;
     const pendingCount = dayAppointments.filter(a => a.status === 'pending').length;
 
+    const handleDayClick = (e: React.MouseEvent) => {
+      // Si c'est une secrétaire et qu'elle fait un Ctrl+clic, activer/désactiver le mode multi-sélection
+      if (isSecretary && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setIsMultiSelectMode(true);
+        
+        // Ajouter ou retirer de la sélection multiple
+        setSelectedDates(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(dateStr)) {
+            newSet.delete(dateStr);
+          } else if (!isPastDay) {
+            newSet.add(dateStr);
+          }
+          return newSet;
+        });
+        return;
+      }
+
+      // Si Shift+clic, sélectionner une plage
+      if (isSecretary && e.shiftKey && selectedDates.size > 0) {
+        e.preventDefault();
+        const firstSelected = Array.from(selectedDates)[0];
+        const startDate = parseISO(firstSelected);
+        const endDate = day;
+        
+        const range: string[] = [];
+        const start = startDate < endDate ? startDate : endDate;
+        const end = startDate < endDate ? endDate : startDate;
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = format(d, 'yyyy-MM-dd');
+          if (!isPast(d) || isToday(d)) {
+            range.push(dateStr);
+          }
+        }
+        
+        setSelectedDates(new Set(range));
+        setIsMultiSelectMode(true);
+        return;
+      }
+      
+      // Clic normal : sélectionner la date
+      setSelectedDate(day);
+      if (!isSameMonth(day, currentDate)) {
+        setCurrentDate(day);
+      }
+      
+      // Si le mode multi-sélection est actif, ajouter à la sélection
+      if (isMultiSelectMode && isSecretary && !isPastDay) {
+        setSelectedDates(prev => {
+          const newSet = new Set(prev);
+          if (newSet.has(dateStr)) {
+            newSet.delete(dateStr);
+          } else {
+            newSet.add(dateStr);
+          }
+          return newSet;
+        });
+      } else {
+        // Sinon, réinitialiser la sélection multiple
+        setSelectedDates(new Set());
+        setIsMultiSelectMode(false);
+      }
+    };
+
     return (
       <button
-        onClick={() => {
-          setSelectedDate(day);
-          if (!isSameMonth(day, currentDate)) {
-            setCurrentDate(day);
-          }
-        }}
+        onClick={handleDayClick}
         disabled={isPastDay}
+        title={isSecretary && !isPastDay ? (isBlocked ? 'Ctrl+clic pour débloquer' : 'Ctrl+clic pour bloquer') : ''}
         className={`
           relative h-32 p-2 border rounded-lg transition-all duration-200
           flex flex-col hover:shadow-md
+          ${isBlocked ? 'bg-red-100 border-red-300' : ''}
+          ${isMultiSelected ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-500/50' : ''}
           ${isSelected 
             ? 'bg-blue-50 border-blue-300 shadow-sm ring-2 ring-blue-500/20' 
             : isPastDay
@@ -416,11 +700,18 @@ export default function CalendarAppointment() {
               {format(day, 'd')}
             </span>
             
-            {isWeekendDay && (
-              <Badge variant="outline" className="text-xs text-red-600 border-red-300 bg-red-50">
-                WE
-              </Badge>
-            )}
+            <div className="flex gap-1">
+              {isBlocked && (
+                <Badge variant="outline" className="text-xs text-red-600 border-red-300 bg-red-200">
+                  🔒 Bloqué
+                </Badge>
+              )}
+              {isWeekendDay && (
+                <Badge variant="outline" className="text-xs text-red-600 border-red-300 bg-red-50">
+                  WE
+                </Badge>
+              )}
+            </div>
           </div>
 
           {/* Indicateurs de rendez-vous */}
@@ -803,7 +1094,7 @@ export default function CalendarAppointment() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 pt-20 p-4 md:p-6 md:pt-24">
       <div className="max-w-7xl mx-auto">
         {/* En-tête */}
         <div className="mb-8">
@@ -817,7 +1108,7 @@ export default function CalendarAppointment() {
               </p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Button
                 variant="outline"
                 onClick={goToToday}
@@ -826,6 +1117,88 @@ export default function CalendarAppointment() {
                 <Calendar className="h-4 w-4 mr-2" />
                 Aujourd'hui
               </Button>
+              
+              {isSecretary && (
+                <>
+                  <Button
+                    variant={isMultiSelectMode ? "default" : "outline"}
+                    onClick={() => {
+                      setIsMultiSelectMode(!isMultiSelectMode);
+                      if (!isMultiSelectMode) {
+                        setSelectedDates(new Set());
+                      }
+                    }}
+                    className={
+                      isMultiSelectMode
+                        ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                        : "border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+                    }
+                  >
+                    <Lock className="h-4 w-4 mr-2" />
+                    {isMultiSelectMode ? "Annuler sélection" : "Sélection multiple"}
+                  </Button>
+
+                  {selectedDates.size > 0 && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const datesArray = Array.from(selectedDates);
+                          const allBlocked = datesArray.every(d => blockedDates.has(d));
+                          if (allBlocked) {
+                            unblockMultipleDates(datesArray);
+                          } else {
+                            blockMultipleDates(datesArray);
+                          }
+                        }}
+                        className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                      >
+                        {Array.from(selectedDates).every(d => blockedDates.has(d)) ? (
+                          <>
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Débloquer ({selectedDates.size})
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="h-4 w-4 mr-2" />
+                            Bloquer ({selectedDates.size})
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
+
+                  <Button
+                    variant={blockedDates.has(format(selectedDate, 'yyyy-MM-dd')) ? "default" : "outline"}
+                    onClick={() => {
+                      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                      if (blockedDates.has(dateStr)) {
+                        unblockDate(selectedDate);
+                      } else {
+                        blockDate(selectedDate);
+                      }
+                    }}
+                    className={
+                      blockedDates.has(format(selectedDate, 'yyyy-MM-dd'))
+                        ? "bg-red-600 hover:bg-red-700 text-white"
+                        : "border-red-300 text-red-700 hover:bg-red-50"
+                    }
+                    disabled={isPast(selectedDate) && !isToday(selectedDate)}
+                  >
+                    {blockedDates.has(format(selectedDate, 'yyyy-MM-dd')) ? (
+                      <>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Débloquer ce jour
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Bloquer ce jour
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
               
               <Button
                 variant="default"
@@ -925,6 +1298,117 @@ export default function CalendarAppointment() {
           {renderView()}
         </div>
         
+        {/* Section sélection multiple */}
+        {isSecretary && selectedDates.size > 0 && (
+          <Card className="mt-6 shadow-lg border-yellow-200">
+            <CardHeader className="bg-gradient-to-r from-yellow-50 to-orange-50">
+              <CardTitle className="flex items-center gap-2 text-yellow-700">
+                <Lock className="h-5 w-5" />
+                {selectedDates.size} jour(s) sélectionné(s)
+              </CardTitle>
+              <CardDescription>
+                Utilisez Ctrl+clic pour sélectionner plusieurs jours, Shift+clic pour une plage
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="flex flex-wrap gap-2 mb-4">
+                {Array.from(selectedDates)
+                  .sort()
+                  .slice(0, 20)
+                  .map((dateStr) => {
+                    const date = parseISO(dateStr);
+                    return (
+                      <Badge
+                        key={dateStr}
+                        variant="outline"
+                        className="text-sm px-3 py-1 bg-yellow-100 border-yellow-300 text-yellow-700"
+                      >
+                        {format(date, 'dd/MM/yyyy')}
+                      </Badge>
+                    );
+                  })}
+                {selectedDates.size > 20 && (
+                  <Badge variant="outline" className="text-sm px-3 py-1">
+                    +{selectedDates.size - 20} autres
+                  </Badge>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    const datesArray = Array.from(selectedDates);
+                    blockMultipleDates(datesArray);
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Bloquer {selectedDates.size} jour(s)
+                </Button>
+                <Button
+                  onClick={() => {
+                    const datesArray = Array.from(selectedDates);
+                    unblockMultipleDates(datesArray);
+                  }}
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-50"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Débloquer {selectedDates.size} jour(s)
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSelectedDates(new Set());
+                    setIsMultiSelectMode(false);
+                  }}
+                  variant="ghost"
+                >
+                  Annuler
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Section jours bloqués pour secrétaire */}
+        {isSecretary && blockedDates.size > 0 && (
+          <Card className="mt-6 shadow-lg border-red-200">
+            <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50">
+              <CardTitle className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="h-5 w-5" />
+                Jours bloqués ({blockedDates.size})
+              </CardTitle>
+              <CardDescription>
+                Ces jours sont indisponibles pour les rendez-vous
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="flex flex-wrap gap-2">
+                {Array.from(blockedDates)
+                  .sort()
+                  .map((dateStr) => {
+                    const date = parseISO(dateStr);
+                    return (
+                      <Badge
+                        key={dateStr}
+                        variant="outline"
+                        className="text-sm px-3 py-1 bg-red-100 border-red-300 text-red-700 flex items-center gap-2"
+                      >
+                        {format(date, 'dd/MM/yyyy')}
+                        <button
+                          onClick={() => unblockDate(date)}
+                          className="hover:bg-red-200 rounded-full p-0.5 transition-colors"
+                          title="Débloquer"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Liste des rendez-vous du jour */}
         <Card className="mt-6 shadow-lg">
           <CardHeader className="bg-gradient-to-r from-gray-50 to-blue-50">
@@ -933,11 +1417,34 @@ export default function CalendarAppointment() {
               Rendez-vous du {format(selectedDate, 'dd/MM/yyyy')}
             </CardTitle>
             <CardDescription>
-              {filteredAppointments.length} rendez-vous programmés
+              {blockedDates.has(format(selectedDate, 'yyyy-MM-dd')) 
+                ? '⚠️ Ce jour est bloqué - Aucun rendez-vous possible'
+                : `${filteredAppointments.length} rendez-vous programmés`
+              }
             </CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            {loading ? (
+            {blockedDates.has(format(selectedDate, 'yyyy-MM-dd')) ? (
+              <div className="text-center py-12">
+                <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-700">
+                  Jour bloqué
+                </h3>
+                <p className="text-gray-600 mt-2">
+                  Ce jour est bloqué. Aucun rendez-vous ne peut être pris.
+                </p>
+                {isSecretary && (
+                  <Button
+                    variant="outline"
+                    className="mt-4 border-red-300 text-red-700 hover:bg-red-50"
+                    onClick={() => unblockDate(selectedDate)}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Débloquer ce jour
+                  </Button>
+                )}
+              </div>
+            ) : loading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-4 text-gray-600">Chargement des rendez-vous...</p>

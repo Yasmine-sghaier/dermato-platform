@@ -25,10 +25,17 @@ import { useNavigate } from "react-router-dom";
 
 type Appointment = {
   id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address?: string;
+  birthdate?: string;
   requested_date: string;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-  notes?: string;
+  status: 'pending' | 'confirmed' | 'done' | 'cancelled';
   created_at: string;
+  updated_at?: string;
+  created_by?: 'patient' | 'secretary';
+  user_id?: number;
 };
 
 export default function PatientSpace() {
@@ -49,6 +56,12 @@ export default function PatientSpace() {
       setLoading(true);
       try {
         const token = localStorage.getItem("token");
+        if (!token) {
+          toast.error("Vous devez être connecté pour voir vos rendez-vous");
+          navigate("/login");
+          return;
+        }
+
         const response = await fetch("http://localhost:5000/api/patient/my-appointments", {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -56,12 +69,28 @@ export default function PatientSpace() {
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            toast.error("Session expirée. Veuillez vous reconnecter.");
+            navigate("/login");
+            return;
+          }
           throw new Error("Erreur lors de la récupération des rendez-vous");
         }
 
         const data = await response.json();
-        setAppointments(data);
-        setFilteredAppointments(data);
+        console.log("Données reçues:", data);
+        
+        // Gérer les deux formats de réponse (ancien et nouveau)
+        const appointmentsList = Array.isArray(data) ? data : (data.data || []);
+        
+        console.log("Rendez-vous trouvés:", appointmentsList.length);
+        
+        setAppointments(appointmentsList);
+        setFilteredAppointments(appointmentsList);
+        
+        if (appointmentsList.length === 0) {
+          console.log("Aucun rendez-vous trouvé pour cet utilisateur");
+        }
       } catch (error) {
         console.error("Erreur:", error);
         toast.error("Erreur lors du chargement de vos rendez-vous");
@@ -73,7 +102,7 @@ export default function PatientSpace() {
     if (isAuthenticated) {
       fetchPatientAppointments();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigate]);
 
   // Filtrer les rendez-vous
   useEffect(() => {
@@ -90,10 +119,22 @@ export default function PatientSpace() {
       filtered = filtered.filter(apt => apt.status === statusFilter);
     }
 
-    // Trier par date (plus récent en premier)
-    filtered = filtered.sort((a, b) => 
-      new Date(b.requested_date).getTime() - new Date(a.requested_date).getTime()
-    );
+    // Trier par date (plus proche en premier pour les futurs, puis les passés)
+    filtered = filtered.sort((a, b) => {
+      const dateA = new Date(a.requested_date).getTime();
+      const dateB = new Date(b.requested_date).getTime();
+      const now = new Date().getTime();
+      
+      // Les rendez-vous futurs en premier, puis les passés
+      const aIsFuture = dateA > now;
+      const bIsFuture = dateB > now;
+      
+      if (aIsFuture && !bIsFuture) return -1;
+      if (!aIsFuture && bIsFuture) return 1;
+      
+      // Si les deux sont futurs ou passés, trier par date
+      return aIsFuture ? dateA - dateB : dateB - dateA;
+    });
 
     setFilteredAppointments(filtered);
   }, [searchTerm, statusFilter, appointments]);
@@ -103,19 +144,19 @@ export default function PatientSpace() {
       pending: "bg-yellow-500/10 text-yellow-600 border-yellow-200",
       confirmed: "bg-green-500/10 text-green-600 border-green-200",
       cancelled: "bg-red-500/10 text-red-600 border-red-200",
-      completed: "bg-blue-500/10 text-blue-600 border-blue-200",
+      done: "bg-blue-500/10 text-blue-600 border-blue-200",
     };
 
     const labels = {
       pending: "En attente",
       confirmed: "Confirmé",
       cancelled: "Annulé",
-      completed: "Terminé",
+      done: "Terminé",
     };
 
     return (
-      <Badge variant="outline" className={variants[status]}>
-        {labels[status]}
+      <Badge variant="outline" className={variants[status] || "bg-gray-500/10 text-gray-600 border-gray-200"}>
+        {labels[status] || status}
       </Badge>
     );
   };
@@ -181,7 +222,8 @@ export default function PatientSpace() {
     total: appointments.length,
     pending: appointments.filter(a => a.status === 'pending').length,
     confirmed: appointments.filter(a => a.status === 'confirmed').length,
-    completed: appointments.filter(a => a.status === 'completed').length,
+    done: appointments.filter(a => a.status === 'done').length,
+    cancelled: appointments.filter(a => a.status === 'cancelled').length,
   };
 
   if (!isAuthenticated) {
@@ -254,7 +296,7 @@ export default function PatientSpace() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Terminés</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.completed}</p>
+                  <p className="text-2xl font-bold text-blue-600">{stats.done}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center">
                   <Calendar className="h-6 w-6 text-blue-600" />
@@ -280,7 +322,7 @@ export default function PatientSpace() {
                     </CardDescription>
                   </div>
                   <Button 
-                    onClick={() => navigate("/create-appointment")}
+                    onClick={() => navigate("/appointments")}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
                     <Plus className="w-4 h-4 mr-2" />
@@ -308,7 +350,7 @@ export default function PatientSpace() {
                     <option value="pending">En attente</option>
                     <option value="confirmed">Confirmés</option>
                     <option value="cancelled">Annulés</option>
-                    <option value="completed">Terminés</option>
+                    <option value="done">Terminés</option>
                   </select>
                 </div>
               </CardHeader>
@@ -329,7 +371,8 @@ export default function PatientSpace() {
                         } ${
                           appointment.status === 'pending' ? 'bg-yellow-500/5' :
                           appointment.status === 'confirmed' ? 'bg-green-500/5' :
-                          appointment.status === 'cancelled' ? 'bg-red-500/5' : 'bg-blue-500/5'
+                          appointment.status === 'cancelled' ? 'bg-red-500/5' :
+                          appointment.status === 'done' ? 'bg-blue-500/5' : 'bg-gray-500/5'
                         } animate-scale-in`}
                         style={{ animationDelay: `${index * 50}ms` }}
                         onClick={() => setSelectedAppointment(appointment)}
@@ -343,11 +386,17 @@ export default function PatientSpace() {
                               {getStatusBadge(appointment.status)}
                             </div>
                             
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
                               <div className="flex items-center gap-2">
                                 <Clock className="h-4 w-4" />
                                 Créé le {new Date(appointment.created_at).toLocaleDateString('fr-FR')}
                               </div>
+                              {appointment.created_by && (
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4" />
+                                  {appointment.created_by === 'patient' ? 'Créé par vous' : 'Créé par secrétaire'}
+                                </div>
+                              )}
                             </div>
                           </div>
                           
@@ -375,7 +424,7 @@ export default function PatientSpace() {
                         <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p className="mb-4">Aucun rendez-vous trouvé</p>
                         <Button 
-                          onClick={() => navigate("/create-appointment")}
+                          onClick={() => navigate("/appointments")}
                           className="bg-blue-600 hover:bg-blue-700"
                         >
                           <Plus className="w-4 h-4 mr-2" />
@@ -412,24 +461,115 @@ export default function PatientSpace() {
                     </h4>
                     
                     <div className="space-y-3">
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-start">
                         <span className="text-sm text-muted-foreground">Date et heure:</span>
                         <span className="font-medium text-right">
                           {formatDate(selectedAppointment.requested_date)}
                         </span>
                       </div>
                       
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Statut:</span>
-                        <span className="font-medium capitalize">{selectedAppointment.status}</span>
+                        {getStatusBadge(selectedAppointment.status)}
                       </div>
                       
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Date de création:</span>
                         <span className="font-medium">
-                          {new Date(selectedAppointment.created_at).toLocaleDateString('fr-FR')}
+                          {new Date(selectedAppointment.created_at).toLocaleDateString('fr-FR', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </span>
                       </div>
+
+                      {selectedAppointment.updated_at && selectedAppointment.updated_at !== selectedAppointment.created_at && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Dernière mise à jour:</span>
+                          <span className="font-medium">
+                            {new Date(selectedAppointment.updated_at).toLocaleDateString('fr-FR', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                      )}
+
+                      {selectedAppointment.created_by && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Créé par:</span>
+                          <span className="font-medium">
+                            {selectedAppointment.created_by === 'patient' ? 'Vous' : 'Secrétaire'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Informations personnelles du rendez-vous */}
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <User className="h-4 w-4 text-blue-600" />
+                      Informations personnelles
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <User className="h-4 w-4 text-muted-foreground mt-1" />
+                        <div className="flex-1">
+                          <p className="text-sm text-muted-foreground">Nom complet</p>
+                          <p className="font-medium">{selectedAppointment.name}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Mail className="h-4 w-4 text-muted-foreground mt-1" />
+                        <div className="flex-1">
+                          <p className="text-sm text-muted-foreground">Email</p>
+                          <p className="font-medium">{selectedAppointment.email}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3">
+                        <Phone className="h-4 w-4 text-muted-foreground mt-1" />
+                        <div className="flex-1">
+                          <p className="text-sm text-muted-foreground">Téléphone</p>
+                          <p className="font-medium">{selectedAppointment.phone}</p>
+                        </div>
+                      </div>
+
+                      {selectedAppointment.address && (
+                        <div className="flex items-start gap-3">
+                          <MapPin className="h-4 w-4 text-muted-foreground mt-1" />
+                          <div className="flex-1">
+                            <p className="text-sm text-muted-foreground">Adresse</p>
+                            <p className="font-medium">{selectedAppointment.address}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedAppointment.birthdate && (
+                        <div className="flex items-start gap-3">
+                          <Cake className="h-4 w-4 text-muted-foreground mt-1" />
+                          <div className="flex-1">
+                            <p className="text-sm text-muted-foreground">Date de naissance</p>
+                            <p className="font-medium">
+                              {new Date(selectedAppointment.birthdate).toLocaleDateString('fr-FR', {
+                                day: 'numeric',
+                                month: 'long',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                     </div>
                   </div>
 
@@ -511,7 +651,7 @@ export default function PatientSpace() {
                 <Button 
                   variant="outline" 
                   className="w-full justify-start"
-                  onClick={() => navigate("/create-appointment")}
+                  onClick={() => navigate("/appointments")}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Prendre un nouveau RDV

@@ -1,4 +1,5 @@
 import Appointment from "../models/Appointment.js";
+import User from "../models/User.js";
 
 export const createAppointment = async (req, res) => {
   try {
@@ -12,7 +13,7 @@ export const createAppointment = async (req, res) => {
     }
 
     // Vérifier si l'utilisateur est connecté
-    const userId = req.user?.id; // Depuis le token JWT
+    const userId = req.user?.id || null; // Depuis le token JWT (peut être null pour visiteur)
     const createdBy = userId ? "patient" : "patient";
 
     // Si l'utilisateur est connecté, vérifier s'il existe
@@ -23,6 +24,8 @@ export const createAppointment = async (req, res) => {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
     }
+    
+    console.log("Création rendez-vous - userId:", userId, "email:", email);
 
     const appointmentDateTime = new Date(`${date}T${time}`);
     
